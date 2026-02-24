@@ -1,0 +1,56 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+/* Test comment */
+:root {
+  --bg: #f8fafc;
+  --node-bg: #ffffff;
+  --node-border: #e2e8f0;
+  --accent: #6366f1;
+}
+
+body {
+  background-color: var(--bg);
+  color: #1e293b;
+  font-family: var(--font-sans);
+}
+
+.canvas-container {
+  background-color: #fdfdfd;
+  background-image: radial-gradient(#e2e8f0 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.node-shadow {
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+}
+
+.node-selected-shadow {
+  box-shadow: 0 0 0 2px #3b82f6, 0 10px 15px -3px rgb(59 130 246 / 0.1);
+}
+
+.connection-line-v {
+  width: 0;
+  border-left: 2px dashed #024bf7;
+}
+
+.dark .connection-line-v {
+  border-left-color: #3b82f6;
+}
+
+.ai-agent-gradient {
+  border: 2px solid transparent;
+  background-image: linear-gradient(white, white), linear-gradient(to right, #f472b6, #6366f1, #fbbf24);
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+}
+
+.dark .ai-agent-gradient {
+  background-image: linear-gradient(#0f172a, #0f172a), linear-gradient(to right, #f472b6, #6366f1, #fbbf24);
+}
+

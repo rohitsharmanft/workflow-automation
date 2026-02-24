@@ -1,0 +1,5 @@
+{
+  "name": "Remix: FlowCraft: Visual Workflow Automator",
+  "description": "A node-based workflow builder for creating complex automations with triggers, actions, AI agents, conditions, and loops.",
+  "requestFramePermissions": []
+}

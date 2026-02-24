@@ -112,34 +112,61 @@ export default function App() {
     alert("Workflow published successfully!");
   };
   
+  // Find a node by ID in the tree
+  const findNode = (nodes: WorkflowNode | null, id: string): WorkflowNode | null => {
+    if (!nodes) return null;
+    if (nodes.id === id) return nodes;
+    
+    if (nodes.children) {
+      for (const child of nodes.children) {
+        const found = findNode(child, id);
+        if (found) return found;
+      }
+    }
+    
+    if (nodes.branches) {
+      for (const child of [...nodes.branches.true, ...nodes.branches.false]) {
+        const found = findNode(child, id);
+        if (found) return found;
+      }
+    }
+
+    if (nodes.paths) {
+      for (const path of nodes.paths) {
+        for (const child of path.nodes) {
+          const found = findNode(child, id);
+          if (found) return found;
+        }
+      }
+    }
+
+    if (nodes.loopBody) {
+      for (const child of nodes.loopBody) {
+        const found = findNode(child, id);
+        if (found) return found;
+      }
+    }
+
+    return null;
+  };
+  
   const handleConnectToNode = (targetId: string) => {
     if (!connectingFrom || !workflow) return;
     
-    const { parentId, branch, pathId } = connectingFrom;
+    const { parentId } = connectingFrom;
     const updatedWorkflow = JSON.parse(JSON.stringify(workflow));
     
-    const newNode: WorkflowNode = {
-      id: uuidv4(),
-      type: 'action',
-      label: 'Jump to node',
-      config: { subType: 'goto', goToId: targetId },
-      children: [],
-    };
-    
-    const parent = findNode(updatedWorkflow, parentId!);
-    if (parent) {
-      if (branch === 'true') parent.branches!.true.push(newNode);
-      else if (branch === 'false') parent.branches!.false.push(newNode);
-      else if (branch === 'loop') parent.loopBody!.push(newNode);
-      else if (pathId) {
-        const path = parent.paths?.find(p => p.id === pathId);
-        if (path) path.nodes.push(newNode);
+    const sourceNode = findNode(updatedWorkflow, parentId!);
+    if (sourceNode) {
+      if (!sourceNode.links) sourceNode.links = [];
+      if (!sourceNode.links.includes(targetId)) {
+        sourceNode.links.push(targetId);
       }
-      else parent.children!.push(newNode);
     }
     
     setWorkflow(updatedWorkflow);
     setConnectingFrom(null);
+    setSelectedNodeId(null);
   };
 
   const jumpConnections = useMemo(() => {
@@ -151,6 +178,13 @@ export default function App() {
         if (findNode(workflow, n.config.goToId)) {
           connections.push({ fromId: n.id, toId: n.config.goToId });
         }
+      }
+      if (n.links) {
+        n.links.forEach(linkId => {
+          if (findNode(workflow, linkId)) {
+            connections.push({ fromId: n.id, toId: linkId });
+          }
+        });
       }
       n.children?.forEach(traverse);
       n.loopBody?.forEach(traverse);
@@ -165,28 +199,29 @@ export default function App() {
 
   const JumpConnections = () => {
     const [coords, setCoords] = useState<{ from: { x: number, y: number }, to: { x: number, y: number } }[]>([]);
+    const svgRef = useRef<SVGSVGElement>(null);
 
     useEffect(() => {
       const updateCoords = () => {
         const newCoords = jumpConnections.map(conn => {
           const fromEl = nodeRefs.current[conn.fromId];
           const toEl = nodeRefs.current[conn.toId];
-          const container = containerRef.current;
+          const svg = svgRef.current;
           
-          if (!fromEl || !toEl || !container) return null;
+          if (!fromEl || !toEl || !svg) return null;
           
           const fromRect = fromEl.getBoundingClientRect();
           const toRect = toEl.getBoundingClientRect();
-          const containerRect = container.getBoundingClientRect();
+          const svgRect = svg.getBoundingClientRect();
           
           return {
             from: {
-              x: (fromRect.left + fromRect.width / 2 - containerRect.left) / zoom,
-              y: (fromRect.top + fromRect.height / 2 - containerRect.top) / zoom
+              x: (fromRect.left + fromRect.width / 2 - svgRect.left) / zoom,
+              y: (fromRect.top + fromRect.height / 2 - svgRect.top) / zoom
             },
             to: {
-              x: (toRect.left + toRect.width / 2 - containerRect.left) / zoom,
-              y: (toRect.top + toRect.height / 2 - containerRect.top) / zoom
+              x: (toRect.left + toRect.width / 2 - svgRect.left) / zoom,
+              y: (toRect.top + toRect.height / 2 - svgRect.top) / zoom
             }
           };
         }).filter(Boolean) as { from: { x: number, y: number }, to: { x: number, y: number } }[];
@@ -196,11 +231,21 @@ export default function App() {
 
       updateCoords();
       window.addEventListener('resize', updateCoords);
-      return () => window.removeEventListener('resize', updateCoords);
+      // We also need to update when position or zoom changes because getBoundingClientRect is absolute
+      // and the SVG moves/scales.
+      const timer = setTimeout(updateCoords, 100); // Small delay to ensure DOM is ready
+      return () => {
+        window.removeEventListener('resize', updateCoords);
+        clearTimeout(timer);
+      };
     }, [jumpConnections, zoom, position, workflow]);
 
     return (
-      <svg className="absolute inset-0 pointer-events-none overflow-visible" style={{ zIndex: 0 }}>
+      <svg 
+        ref={svgRef}
+        className="absolute inset-0 pointer-events-none overflow-visible" 
+        style={{ zIndex: 0 }}
+      >
         <defs>
           <marker
             id="arrowhead"
@@ -303,45 +348,7 @@ export default function App() {
       return () => container.removeEventListener('wheel', handleWheel);
     }
   }, [handleWheel]);
-
-  // Find a node by ID in the tree
-  const findNode = (nodes: WorkflowNode | null, id: string): WorkflowNode | null => {
-    if (!nodes) return null;
-    if (nodes.id === id) return nodes;
-    
-    if (nodes.children) {
-      for (const child of nodes.children) {
-        const found = findNode(child, id);
-        if (found) return found;
-      }
-    }
-    
-    if (nodes.branches) {
-      for (const child of [...nodes.branches.true, ...nodes.branches.false]) {
-        const found = findNode(child, id);
-        if (found) return found;
-      }
-    }
-
-    if (nodes.paths) {
-      for (const path of nodes.paths) {
-        for (const child of path.nodes) {
-          const found = findNode(child, id);
-          if (found) return found;
-        }
-      }
-    }
-
-    if (nodes.loopBody) {
-      for (const child of nodes.loopBody) {
-        const found = findNode(child, id);
-        if (found) return found;
-      }
-    }
-
-    return null;
-  };
-
+ 
   const selectedNode = useMemo(() => {
     if (!selectedNodeId) return null;
     return findNode(workflow, selectedNodeId);
@@ -480,7 +487,7 @@ export default function App() {
 
     removeRecursive(updatedWorkflow);
     setWorkflow(updatedWorkflow);
-    if (selectedNodeId === id) setSelectedNodeId(null);
+    setSelectedNodeId(null);
   };
 
   const moveNode = (id: string, direction: 'up' | 'down') => {
@@ -558,33 +565,7 @@ export default function App() {
         {hideLabel && <div className="h-6 connection-line-v" />}
 
         {/* Node Card */}
-        {node.config?.goToId ? (
-          <motion.div
-            layoutId={node.id}
-            onClick={(e) => {
-              e.stopPropagation();
-              setSelectedNodeId(node.id);
-            }}
-            className={`
-              relative group flex items-center gap-3 p-3 rounded-full border-2 transition-all cursor-pointer bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 shadow-lg
-              ${isSelected ? 'ring-4 ring-blue-500/10 border-blue-500' : ''}
-            `}
-          >
-            <div className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center">
-              <ArrowRight size={16} />
-            </div>
-            <span className="text-xs font-bold text-blue-600 dark:text-blue-400 pr-2">Jump to node</span>
-            <button 
-              onClick={(e) => {
-                e.stopPropagation();
-                deleteNode(node.id);
-              }}
-              className="p-1.5 hover:bg-blue-100 dark:hover:bg-blue-800 rounded-full text-blue-400 transition-colors"
-            >
-              <Trash2 size={14} />
-            </button>
-          </motion.div>
-        ) : node.type !== 'foreach' && node.type !== 'condition' ? (
+        {node.type !== 'foreach' && node.type !== 'condition' ? (
           <motion.div
             layoutId={node.id}
             onClick={(e) => {
@@ -677,6 +658,41 @@ export default function App() {
                           <Trash2 size={12} />
                           Delete Node
                         </button>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setConnectingFrom({ parentId: node.id });
+                            setNodeMenuId(null);
+                          }}
+                          className="w-full px-3 py-2 text-left text-[11px] font-bold text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors flex items-center gap-2"
+                        >
+                          <ArrowRight size={12} />
+                          Connect to...
+                        </button>
+                        {node.links && node.links.length > 0 && (
+                          <div className="border-t border-slate-100 dark:border-slate-800 mt-1 pt-1">
+                            <div className="px-3 py-1 text-[9px] font-black uppercase tracking-widest text-slate-400">Links</div>
+                            {node.links.map(linkId => (
+                              <button
+                                key={linkId}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const updatedWorkflow = JSON.parse(JSON.stringify(workflow));
+                                  const n = findNode(updatedWorkflow, node.id);
+                                  if (n && n.links) {
+                                    n.links = n.links.filter(id => id !== linkId);
+                                  }
+                                  setWorkflow(updatedWorkflow);
+                                  setNodeMenuId(null);
+                                }}
+                                className="w-full px-3 py-2 text-left text-[10px] font-medium text-slate-600 dark:text-slate-300 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex items-center justify-between group/link"
+                              >
+                                <span>To {findNode(workflow, linkId)?.label || 'Node'}</span>
+                                <X size={10} className="text-slate-300 group-hover/link:text-red-500" />
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </motion.div>
                     </>
                   )}
@@ -690,7 +706,9 @@ export default function App() {
             onClick={(e) => {
               e.stopPropagation();
               if (connectingFrom) {
-                handleConnectToNode(node.id);
+                if (node.type !== 'trigger') {
+                  handleConnectToNode(node.id);
+                }
                 return;
               }
               setSelectedNodeId(node.id);
@@ -756,7 +774,9 @@ export default function App() {
               onClick={(e) => {
                 e.stopPropagation();
                 if (connectingFrom) {
-                  handleConnectToNode(node.id);
+                  if (node.type !== 'trigger') {
+                    handleConnectToNode(node.id);
+                  }
                   return;
                 }
                 setSelectedNodeId(node.id);
@@ -868,7 +888,7 @@ export default function App() {
         {node.children?.map((child, idx) => renderNode(child, { isFirst: false }))}
         
         {/* Add Button for next sequential node - only if this is the end of the chain */}
-        {(!node.children || node.children.length === 0) && node.type !== 'ai-agent' && node.type !== 'condition' && !node.config?.goToId && (
+        {(!node.children || node.children.length === 0) && node.type !== 'ai-agent' && node.type !== 'condition' && (
           <AddButton parentId={node.id} />
         )}
       </div>
@@ -1002,14 +1022,14 @@ export default function App() {
                 <button 
                   onClick={() => {
                     setActivePopoverId(null);
-                    setConnectingFrom({ parentId, branch, pathId });
+                    setConnectingFrom({ parentId });
                   }}
                   className="w-full px-4 py-2.5 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-3 transition-colors"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 flex items-center justify-center">
-                    <ChevronRight size={16} />
+                  <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-500 dark:text-blue-400 flex items-center justify-center">
+                    <ArrowRight size={16} />
                   </div>
-                  <span className="font-medium">Connect to node</span>
+                  <span className="font-medium">Connect to existing node</span>
                 </button>
               </motion.div>
             </>
@@ -1032,7 +1052,7 @@ export default function App() {
           >
             <div className="flex flex-col">
               <span className="text-xs font-bold uppercase tracking-widest opacity-80">Connecting Mode</span>
-              <span className="text-sm font-medium">Select a node to connect to (Action, AI Agent, or Condition)</span>
+              <span className="text-sm font-medium">Select an Action, AI Agent, or Condition to connect to</span>
             </div>
             <button 
               onClick={() => setConnectingFrom(null)}

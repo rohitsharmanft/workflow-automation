@@ -17,6 +17,7 @@ export interface WorkflowNode {
   }[]; // For AI Agent multi-branching
   loopBody?: WorkflowNode[]; // For Foreach
   goToId?: string; // For connecting to an existing node
+  links?: string[]; // Array of target node IDs for arbitrary connections
 }
 
 export interface Workflow {

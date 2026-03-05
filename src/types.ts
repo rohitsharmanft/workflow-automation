@@ -1,30 +1,26 @@
-export type NodeType = 'trigger' | 'action' | 'ai-agent' | 'condition' | 'foreach';
+export type NodeType = 'trigger' | 'action' | 'agent' | 'condition' | 'foreach' | 'note';
+
+export interface Connection {
+  id: string;
+  prompt?: string;
+}
 
 export interface WorkflowNode {
   id: string;
   type: NodeType;
   label: string;
-  config: Record<string, any>;
-  children?: WorkflowNode[]; // For sequential flow
-  branches?: {
-    true: WorkflowNode[];
-    false: WorkflowNode[];
-  }; // For Condition
-  paths?: {
-    id: string;
-    label: string;
-    nodes: WorkflowNode[];
-  }[]; // For AI Agent multi-branching
-  loopBody?: WorkflowNode[]; // For Foreach
-  goToId?: string; // For connecting to an existing node
-  links?: string[]; // Array of target node IDs for arbitrary connections
+  to: Connection[];
+  paths?: { id: string; label: string; nodeId?: string }[];
+  triggerKey?: string;
+  actionKey?: string;
+  prompt?: string;
+  skills?: Record<string, { id: string; name: string; icon: string }>;
+  markdown?: string;
+  customPosition?: { refId: string; x: number; y: number };
+  size?: { width: number; height: number };
 }
 
-export interface Workflow {
-  id: string;
-  name: string;
-  trigger: WorkflowNode | null;
-}
+export type Workflow = Record<string, WorkflowNode>;
 
 export type TriggerType = 'http' | 'schedule' | 'webhook';
 export type ActionType = 'email' | 'slack' | 'database' | 'api';

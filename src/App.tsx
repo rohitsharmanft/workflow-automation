@@ -37,21 +37,21 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { WorkflowNode, NodeType, TriggerType, ActionType } from './types';
+import { WorkflowNode, Workflow, NodeType, TriggerType, ActionType } from './types';
 import { TRIGGER_TYPES, ACTION_TYPES, AI_AGENT_TYPES, NODE_ICONS } from './constants';
 
 export default function App() {
-  const [workflow, setWorkflow] = useState<WorkflowNode | null>(null);
+  const [workflow, setWorkflow] = useState<Workflow | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activePopoverId, setActivePopoverId] = useState<string | null>(null);
-  const [modalContext, setModalContext] = useState<{ parentId: string | null; branch?: 'true' | 'false' | 'loop'; pathId?: string; pendingType?: NodeType } | null>(null);
+  const [modalContext, setModalContext] = useState<{ parentId: string | null; prompt?: string; pathId?: string; pendingType?: NodeType } | null>(null);
 
   const [isChangingTrigger, setIsChangingTrigger] = useState(false);
   const [changingNodeId, setChangingNodeId] = useState<string | null>(null);
   const [nodeMenuId, setNodeMenuId] = useState<string | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [connectingFrom, setConnectingFrom] = useState<{ parentId: string | null; branch?: 'true' | 'false' | 'loop'; pathId?: string } | null>(null);
+  const [connectingFrom, setConnectingFrom] = useState<{ parentId: string | null; prompt?: string; pathId?: string } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [collapsedCategories, setCollapsedCategories] = useState<string[]>([]);
 
@@ -64,6 +64,117 @@ export default function App() {
   const containerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const nodeRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  const migrateWorkflow = (data: any): Workflow => {
+    if (!data) return {};
+    
+    // If it's already a flat map (Record<string, WorkflowNode>)
+    if (typeof data === 'object' && !Array.isArray(data) && (data.start || Object.keys(data).length > 0)) {
+      const migrated: Workflow = {};
+      Object.keys(data).forEach(id => {
+        const node = data[id];
+        migrated[id] = {
+          ...node,
+          type: node.type === 'ai-agent' ? 'agent' : node.type,
+          to: node.to || []
+        };
+      });
+      return migrated;
+    }
+
+    // If it's the old tree structure (a single node)
+    if (data.id && data.type) {
+      const flatMap: Workflow = {};
+      const traverse = (node: any) => {
+        const newNode: WorkflowNode = {
+          id: node.id,
+          type: node.type === 'ai-agent' ? 'agent' : node.type,
+          label: node.label,
+          to: [],
+          triggerKey: node.triggerKey,
+          actionKey: node.actionKey,
+          prompt: node.prompt,
+          skills: node.skills,
+          markdown: node.markdown,
+          customPosition: node.customPosition,
+          size: node.size
+        };
+
+        // Handle children (sequential)
+        if (node.children && Array.isArray(node.children)) {
+          node.children.forEach((child: any) => {
+            newNode.to.push({ id: child.id });
+            traverse(child);
+          });
+        }
+
+        // Handle branches (condition)
+        if (node.branches) {
+          if (node.branches.true) {
+            newNode.to.push({ id: node.branches.true.id, prompt: 'True' });
+            traverse(node.branches.true);
+          }
+          if (node.branches.false) {
+            newNode.to.push({ id: node.branches.false.id, prompt: 'False' });
+            traverse(node.branches.false);
+          }
+        }
+
+        // Handle paths (agent)
+        if (node.paths && Array.isArray(node.paths)) {
+          newNode.paths = node.paths.map((path: any) => {
+            if (path.node) {
+              traverse(path.node);
+              return { id: path.id || uuidv4(), label: path.label, nodeId: path.node.id };
+            }
+            return { id: path.id || uuidv4(), label: path.label, nodeId: path.nodeId };
+          });
+        }
+
+        // Handle loopBody (foreach)
+        if (node.loopBody && Array.isArray(node.loopBody)) {
+          node.loopBody.forEach((child: any) => {
+            newNode.to.push({ id: child.id, prompt: 'loop' });
+            traverse(child);
+          });
+        }
+
+        flatMap[node.id] = newNode;
+      };
+
+      traverse(data);
+      
+      // Ensure 'start' node exists
+      if (!flatMap['start'] && data.id) {
+        const rootId = data.id;
+        const rootNode = flatMap[rootId];
+        delete flatMap[rootId];
+        rootNode.id = 'start';
+        flatMap['start'] = rootNode;
+        
+        Object.values(flatMap).forEach(n => {
+          n.to.forEach(c => {
+            if (c.id === rootId) c.id = 'start';
+          });
+        });
+      }
+      return flatMap;
+    }
+
+    return data;
+  };
+
+  useEffect(() => {
+    const saved = localStorage.getItem('saved_workflow');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        setWorkflow(migrateWorkflow(parsed));
+      } catch (err) {
+        console.error("Failed to load saved workflow", err);
+      }
+    }
+  }, []);
 
   const downloadWorkflow = () => {
     if (!workflow) return;
@@ -85,7 +196,7 @@ export default function App() {
       try {
         const content = e.target?.result as string;
         const parsed = JSON.parse(content);
-        setWorkflow(parsed);
+        setWorkflow(migrateWorkflow(parsed));
       } catch (err) {
         alert("Failed to parse workflow file.");
       }
@@ -112,55 +223,22 @@ export default function App() {
     alert("Workflow published successfully!");
   };
   
-  // Find a node by ID in the tree
-  const findNode = (nodes: WorkflowNode | null, id: string): WorkflowNode | null => {
-    if (!nodes) return null;
-    if (nodes.id === id) return nodes;
-    
-    if (nodes.children) {
-      for (const child of nodes.children) {
-        const found = findNode(child, id);
-        if (found) return found;
-      }
-    }
-    
-    if (nodes.branches) {
-      for (const child of [...nodes.branches.true, ...nodes.branches.false]) {
-        const found = findNode(child, id);
-        if (found) return found;
-      }
-    }
-
-    if (nodes.paths) {
-      for (const path of nodes.paths) {
-        for (const child of path.nodes) {
-          const found = findNode(child, id);
-          if (found) return found;
-        }
-      }
-    }
-
-    if (nodes.loopBody) {
-      for (const child of nodes.loopBody) {
-        const found = findNode(child, id);
-        if (found) return found;
-      }
-    }
-
-    return null;
-  };
-  
   const handleConnectToNode = (targetId: string) => {
     if (!connectingFrom || !workflow) return;
     
-    const { parentId } = connectingFrom;
-    const updatedWorkflow = JSON.parse(JSON.stringify(workflow));
+    const { parentId, prompt, pathId } = connectingFrom;
+    const updatedWorkflow = { ...workflow };
     
-    const sourceNode = findNode(updatedWorkflow, parentId!);
-    if (sourceNode) {
-      if (!sourceNode.links) sourceNode.links = [];
-      if (!sourceNode.links.includes(targetId)) {
-        sourceNode.links.push(targetId);
+    if (updatedWorkflow[parentId!]) {
+      const parent = updatedWorkflow[parentId!];
+      if (pathId && parent.paths) {
+        const path = parent.paths.find(p => p.id === pathId);
+        if (path) path.nodeId = targetId;
+      } else {
+        if (!parent.to) parent.to = [];
+        if (!parent.to.some(c => c.id === targetId)) {
+          parent.to.push({ id: targetId, prompt });
+        }
       }
     }
     
@@ -171,29 +249,22 @@ export default function App() {
 
   const jumpConnections = useMemo(() => {
     if (!workflow) return [];
-    const connections: { fromId: string, toId: string }[] = [];
+    const connections: { fromId: string, toId: string, prompt?: string }[] = [];
     
-    const traverse = (n: WorkflowNode) => {
-      if (n.config?.goToId) {
-        if (findNode(workflow, n.config.goToId)) {
-          connections.push({ fromId: n.id, toId: n.config.goToId });
+    Object.values(workflow).forEach(node => {
+      node.to?.forEach(conn => {
+        // Filter out connections that are already rendered in the tree structure
+        const isSequential = !conn.prompt && (node.type !== 'agent' && node.type !== 'condition' && node.type !== 'foreach');
+        const isConditionBranch = (conn.prompt === 'True' || conn.prompt === 'False') && node.type === 'condition';
+        const isLoopBody = conn.prompt === 'loop' && node.type === 'foreach';
+        const isAgentPath = node.type === 'agent' && node.paths?.some(p => p.nodeId === conn.id);
+
+        if (!isSequential && !isConditionBranch && !isLoopBody && !isAgentPath) {
+          connections.push({ fromId: node.id, toId: conn.id, prompt: conn.prompt });
         }
-      }
-      if (n.links) {
-        n.links.forEach(linkId => {
-          if (findNode(workflow, linkId)) {
-            connections.push({ fromId: n.id, toId: linkId });
-          }
-        });
-      }
-      n.children?.forEach(traverse);
-      n.loopBody?.forEach(traverse);
-      n.branches?.true.forEach(traverse);
-      n.branches?.false.forEach(traverse);
-      n.paths?.forEach(p => p.nodes.forEach(traverse));
-    };
+      });
+    });
     
-    traverse(workflow);
     return connections;
   }, [workflow]);
 
@@ -350,20 +421,51 @@ export default function App() {
   }, [handleWheel]);
  
   const selectedNode = useMemo(() => {
-    if (!selectedNodeId) return null;
-    return findNode(workflow, selectedNodeId);
+    if (!selectedNodeId || !workflow) return null;
+    return workflow[selectedNodeId] || null;
   }, [workflow, selectedNodeId]);
 
   const addNode = (type: NodeType, subType?: string, overrideContext?: any) => {
     const context = overrideContext || modalContext;
+    const nodeId = uuidv4();
     
+    const getLabel = (type: NodeType, subType?: string) => {
+      if (type === 'trigger' && subType) {
+        return TRIGGER_TYPES.find(t => t.id === subType)?.label || type.toUpperCase();
+      }
+      if (type === 'action' && subType) {
+        return ACTION_TYPES.find(a => a.id === subType)?.label || type.toUpperCase();
+      }
+      if (type === 'agent') return 'AI AGENT';
+      if (type === 'condition') return 'CONDITION';
+      if (type === 'foreach') return 'FOREACH';
+      return type.toUpperCase();
+    };
+
     if (changingNodeId && workflow) {
-      const updatedWorkflow = JSON.parse(JSON.stringify(workflow));
-      const nodeToUpdate = findNode(updatedWorkflow, changingNodeId);
-      if (nodeToUpdate) {
-        nodeToUpdate.type = type;
-        nodeToUpdate.config = { ...nodeToUpdate.config, subType };
-        nodeToUpdate.label = subType ? subType.toUpperCase() : type.toUpperCase();
+      const updatedWorkflow = { ...workflow };
+      if (updatedWorkflow[changingNodeId]) {
+        const node = updatedWorkflow[changingNodeId];
+        updatedWorkflow[changingNodeId] = {
+          ...node,
+          type,
+          label: getLabel(type, subType),
+        };
+        
+        // Clean up old specific keys
+        delete updatedWorkflow[changingNodeId].triggerKey;
+        delete updatedWorkflow[changingNodeId].actionKey;
+        delete updatedWorkflow[changingNodeId].prompt;
+        delete updatedWorkflow[changingNodeId].skills;
+        
+        if (type === 'trigger') updatedWorkflow[changingNodeId].triggerKey = subType;
+        if (type === 'action') updatedWorkflow[changingNodeId].actionKey = subType;
+        if (type === 'agent') {
+          updatedWorkflow[changingNodeId].paths = [
+            { id: uuidv4(), label: 'Path 1' },
+            { id: uuidv4(), label: 'Path 2' }
+          ];
+        }
       }
       setWorkflow(updatedWorkflow);
       setChangingNodeId(null);
@@ -373,10 +475,12 @@ export default function App() {
     }
 
     if (isChangingTrigger && workflow) {
-      const updatedWorkflow = JSON.parse(JSON.stringify(workflow));
-      updatedWorkflow.type = type;
-      updatedWorkflow.config = { subType };
-      updatedWorkflow.label = subType ? subType.toUpperCase() : type.toUpperCase();
+      const updatedWorkflow = { ...workflow };
+      if (updatedWorkflow['start']) {
+        updatedWorkflow['start'].type = type;
+        updatedWorkflow['start'].triggerKey = subType;
+        updatedWorkflow['start'].label = getLabel(type, subType);
+      }
       setWorkflow(updatedWorkflow);
       setIsChangingTrigger(false);
       setIsModalOpen(false);
@@ -384,41 +488,41 @@ export default function App() {
     }
 
     const newNode: WorkflowNode = {
-      id: uuidv4(),
+      id: nodeId,
       type,
-      label: subType ? subType.toUpperCase() : type.toUpperCase(),
-      config: { subType },
-      children: [],
+      label: getLabel(type, subType),
+      to: [],
     };
 
-    if (type === 'condition') {
-      newNode.branches = { true: [], false: [] };
-    } else if (type === 'foreach') {
-      newNode.loopBody = [];
-    } else if (type === 'ai-agent') {
+    if (type === 'action') {
+      newNode.actionKey = subType;
+    } else if (type === 'agent') {
+      newNode.prompt = "You're a helpful AI agent...";
+      newNode.skills = {};
       newNode.paths = [
-        { id: uuidv4(), label: 'Path 1', nodes: [] },
-        { id: uuidv4(), label: 'Path 2', nodes: [] }
+        { id: uuidv4(), label: 'Path 1' },
+        { id: uuidv4(), label: 'Path 2' }
       ];
     }
 
     if (!workflow) {
-      setWorkflow(newNode);
+      setWorkflow({ start: { ...newNode, id: 'start', type: 'trigger' } });
     } else if (context) {
-      const { parentId, branch, pathId } = context;
-      const updatedWorkflow = JSON.parse(JSON.stringify(workflow));
-      const parent = findNode(updatedWorkflow, parentId!);
+      const { parentId, prompt, pathId } = context;
+      const updatedWorkflow = { ...workflow };
+      updatedWorkflow[nodeId] = newNode;
       
-      if (parent) {
-        if (branch === 'true') parent.branches!.true.push(newNode);
-        else if (branch === 'false') parent.branches!.false.push(newNode);
-        else if (branch === 'loop') parent.loopBody!.push(newNode);
-        else if (pathId) {
-          const path = parent.paths?.find(p => p.id === pathId);
-          if (path) path.nodes.push(newNode);
+      if (updatedWorkflow[parentId!]) {
+        const parent = updatedWorkflow[parentId!];
+        if (pathId && parent.paths) {
+          const path = parent.paths.find(p => p.id === pathId);
+          if (path) path.nodeId = nodeId;
+        } else {
+          if (!parent.to) parent.to = [];
+          parent.to.push({ id: nodeId, prompt });
         }
-        else parent.children!.push(newNode);
       }
+      
       setWorkflow(updatedWorkflow);
     }
 
@@ -427,116 +531,61 @@ export default function App() {
   };
 
   const deleteNode = (id: string) => {
-    if (workflow?.id === id) {
+    if (!workflow) return;
+    if (id === 'start') {
       setWorkflow(null);
       setSelectedNodeId(null);
       return;
     }
 
-    const updatedWorkflow = JSON.parse(JSON.stringify(workflow));
-    const removeRecursive = (node: WorkflowNode): boolean => {
-      if (node.children) {
-        const index = node.children.findIndex(n => n.id === id);
-        if (index !== -1) {
-          node.children.splice(index, 1);
-          return true;
-        }
-        for (const child of node.children) {
-          if (removeRecursive(child)) return true;
-        }
-      }
-      if (node.branches) {
-        const tIndex = node.branches.true.findIndex(n => n.id === id);
-        if (tIndex !== -1) {
-          node.branches.true.splice(tIndex, 1);
-          return true;
-        }
-        const fIndex = node.branches.false.findIndex(n => n.id === id);
-        if (fIndex !== -1) {
-          node.branches.false.splice(fIndex, 1);
-          return true;
-        }
-        for (const child of [...node.branches.true, ...node.branches.false]) {
-          if (removeRecursive(child)) return true;
-        }
-      }
+    const updatedWorkflow = { ...workflow };
+    delete updatedWorkflow[id];
+    
+    // Remove references to this node in other nodes' 'to' arrays or 'paths'
+    Object.values(updatedWorkflow).forEach(node => {
+      node.to = node.to.filter(c => c.id !== id);
       if (node.paths) {
-        for (const path of node.paths) {
-          const index = path.nodes.findIndex(n => n.id === id);
-          if (index !== -1) {
-            path.nodes.splice(index, 1);
-            return true;
-          }
-          for (const child of path.nodes) {
-            if (removeRecursive(child)) return true;
-          }
-        }
+        node.paths.forEach(p => {
+          if (p.nodeId === id) delete p.nodeId;
+        });
       }
-      if (node.loopBody) {
-        const index = node.loopBody.findIndex(n => n.id === id);
-        if (index !== -1) {
-          node.loopBody.splice(index, 1);
-          return true;
-        }
-        for (const child of node.loopBody) {
-          if (removeRecursive(child)) return true;
-        }
-      }
-      return false;
-    };
+    });
 
-    removeRecursive(updatedWorkflow);
     setWorkflow(updatedWorkflow);
     setSelectedNodeId(null);
   };
 
   const moveNode = (id: string, direction: 'up' | 'down') => {
-    const updatedWorkflow = JSON.parse(JSON.stringify(workflow));
+    if (!workflow) return;
+    const updatedWorkflow = { ...workflow };
     
-    const moveRecursive = (node: WorkflowNode): boolean => {
-      const collections = [
-        { list: node.children },
-        { list: node.loopBody },
-        { list: node.branches?.true },
-        { list: node.branches?.false },
-        ...(node.paths?.map(p => ({ list: p.nodes })) || [])
-      ];
-
-      for (const col of collections) {
-        if (!col.list) continue;
-        const index = col.list.findIndex(n => n.id === id);
-        if (index !== -1) {
-          const newIndex = direction === 'up' ? index - 1 : index + 1;
-          if (newIndex >= 0 && newIndex < col.list.length) {
-            const [moved] = col.list.splice(index, 1);
-            col.list.splice(newIndex, 0, moved);
-            return true;
-          }
-        }
+    // Find parent of this node
+    const parent = Object.values(updatedWorkflow).find(n => n.to.some(c => c.id === id));
+    if (parent) {
+      const index = parent.to.findIndex(c => c.id === id);
+      const newIndex = direction === 'up' ? index - 1 : index + 1;
+      if (newIndex >= 0 && newIndex < parent.to.length) {
+        const [moved] = parent.to.splice(index, 1);
+        parent.to.splice(newIndex, 0, moved);
+        setWorkflow(updatedWorkflow);
       }
-
-      const allChildren = [
-        ...(node.children || []),
-        ...(node.loopBody || []),
-        ...(node.branches?.true || []),
-        ...(node.branches?.false || []),
-        ...(node.paths?.flatMap(p => p.nodes) || [])
-      ];
-
-      for (const child of allChildren) {
-        if (moveRecursive(child)) return true;
-      }
-      return false;
-    };
-
-    moveRecursive(updatedWorkflow);
-    setWorkflow(updatedWorkflow);
+    }
   };
 
   const renderNode = (node: WorkflowNode, options: { isFirst?: boolean; hideLabel?: boolean } = {}) => {
+    if (!workflow) return null;
     const { isFirst = false, hideLabel = false } = options;
     const Icon = NODE_ICONS[node.type] || Play;
     const isSelected = selectedNodeId === node.id;
+
+    const children = node.to?.filter(c => !c.prompt).map(c => workflow[c.id]).filter(Boolean) as WorkflowNode[];
+    const trueBranch = node.to?.filter(c => c.prompt === 'True').map(c => workflow[c.id]).filter(Boolean) as WorkflowNode[];
+    const falseBranch = node.to?.filter(c => c.prompt === 'False').map(c => workflow[c.id]).filter(Boolean) as WorkflowNode[];
+    const loopBody = node.to?.filter(c => c.prompt === 'loop').map(c => workflow[c.id]).filter(Boolean) as WorkflowNode[];
+    const agentPaths = node.paths?.map(p => ({
+      ...p,
+      node: p.nodeId ? workflow[p.nodeId] : undefined
+    })) || [];
 
     return (
       <div 
@@ -580,7 +629,7 @@ export default function App() {
             }}
             className={`
               relative group flex items-center gap-5 p-4 rounded-[2rem] border-2 transition-all cursor-pointer w-80 bg-white dark:bg-slate-900 shadow-xl
-              ${node.type === 'ai-agent' ? 'ai-agent-gradient' : ''}
+              ${node.type === 'agent' ? 'ai-agent-gradient' : ''}
               ${isSelected 
                 ? 'border-indigo-500 ring-4 ring-indigo-500/10' 
                 : 'border-slate-100 dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700'}
@@ -592,7 +641,7 @@ export default function App() {
                 ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' 
                 : node.type === 'trigger' 
                   ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400'
-                  : node.type === 'ai-agent'
+                  : node.type === 'agent'
                     ? 'bg-fuchsia-50 dark:bg-fuchsia-900/30 text-fuchsia-600 dark:text-fuchsia-400'
                     : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
             }`}>
@@ -601,9 +650,9 @@ export default function App() {
             <div className="flex-1 min-w-0">
               <p className={`text-[10px] font-black uppercase tracking-[0.2em] mb-1 ${
                 node.type === 'trigger' ? 'text-teal-500' : 
-                node.type === 'ai-agent' ? 'text-fuchsia-500' : 
+                node.type === 'agent' ? 'text-fuchsia-500' : 
                 'text-slate-400'
-              }`}>{node.type}</p>
+              }`}>{node.type === 'agent' ? 'AI-AGENT' : node.type}</p>
               <p className="text-base font-bold text-slate-800 dark:text-slate-100 truncate">{node.label}</p>
             </div>
             <div className="flex flex-col items-end gap-2">
@@ -669,30 +718,6 @@ export default function App() {
                           <ArrowRight size={12} />
                           Connect to...
                         </button>
-                        {node.links && node.links.length > 0 && (
-                          <div className="border-t border-slate-100 dark:border-slate-800 mt-1 pt-1">
-                            <div className="px-3 py-1 text-[9px] font-black uppercase tracking-widest text-slate-400">Links</div>
-                            {node.links.map(linkId => (
-                              <button
-                                key={linkId}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const updatedWorkflow = JSON.parse(JSON.stringify(workflow));
-                                  const n = findNode(updatedWorkflow, node.id);
-                                  if (n && n.links) {
-                                    n.links = n.links.filter(id => id !== linkId);
-                                  }
-                                  setWorkflow(updatedWorkflow);
-                                  setNodeMenuId(null);
-                                }}
-                                className="w-full px-3 py-2 text-left text-[10px] font-medium text-slate-600 dark:text-slate-300 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex items-center justify-between group/link"
-                              >
-                                <span>To {findNode(workflow, linkId)?.label || 'Node'}</span>
-                                <X size={10} className="text-slate-300 group-hover/link:text-red-500" />
-                              </button>
-                            ))}
-                          </div>
-                        )}
                       </motion.div>
                     </>
                   )}
@@ -755,8 +780,8 @@ export default function App() {
               </div>
               
               <div className="w-fit min-w-full border-2 border-dashed border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 rounded-[3rem] p-8 shadow-inner min-h-[200px] flex flex-col items-center">
-                {node.loopBody?.map((child, idx) => renderNode(child, { isFirst: idx === 0, hideLabel: idx === 0 }))}
-                {(!node.loopBody || node.loopBody.length === 0) && (
+                {loopBody.map((child, idx) => renderNode(child, { isFirst: idx === 0, hideLabel: idx === 0 }))}
+                {(!loopBody || loopBody.length === 0) && (
                   <AddButton parentId={node.id} branch="loop" />
                 )}
               </div>
@@ -832,8 +857,8 @@ export default function App() {
                   True <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
                 </div>
                 <div className="w-full border-2 border-dashed border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 rounded-[3rem] p-6 shadow-inner min-h-[200px] flex flex-col items-center">
-                   {node.branches?.true.map((child, idx) => renderNode(child, { isFirst: idx === 0, hideLabel: idx === 0 }))}
-                   {(!node.branches?.true || node.branches.true.length === 0) && (
+                   {trueBranch.map((child, idx) => renderNode(child, { isFirst: idx === 0, hideLabel: idx === 0 }))}
+                   {(!trueBranch || trueBranch.length === 0) && (
                      <AddButton parentId={node.id} branch="true" />
                    )}
                 </div>
@@ -845,8 +870,8 @@ export default function App() {
                   False <div className="w-1.5 h-1.5 bg-white rounded-full opacity-60" />
                 </div>
                 <div className="w-full border-2 border-dashed border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 rounded-[3rem] p-6 shadow-inner min-h-[200px] flex flex-col items-center">
-                   {node.branches?.false.map((child, idx) => renderNode(child, { isFirst: idx === 0, hideLabel: idx === 0 }))}
-                   {(!node.branches?.false || node.branches.false.length === 0) && (
+                   {falseBranch.map((child, idx) => renderNode(child, { isFirst: idx === 0, hideLabel: idx === 0 }))}
+                   {(!falseBranch || falseBranch.length === 0) && (
                      <AddButton parentId={node.id} branch="false" />
                    )}
                 </div>
@@ -855,18 +880,18 @@ export default function App() {
           </div>
         )}
 
-        {/* Nested Structures */}
-        {node.type === 'ai-agent' && (
+        {/* Agent Paths */}
+        {node.type === 'agent' && (
           <div className="flex flex-col items-center">
             <div className="h-6 connection-line-v" />
             <div className="flex justify-center relative">
-              {node.paths?.map((path, idx) => (
+              {agentPaths.map((path, idx) => (
                 <div key={path.id} className="flex flex-col items-center relative z-10 min-w-[20rem] px-8">
                   {/* Horizontal Line Segments to connect paths */}
-                  {node.paths && node.paths.length > 1 && (
+                  {agentPaths.length > 1 && (
                     <div className="absolute top-0 left-0 right-0 flex">
                       <div className={`flex-1 border-t-2 border-dashed border-[#024bf7] dark:border-[#3b82f6] ${idx === 0 ? 'opacity-0' : ''}`} />
-                      <div className={`flex-1 border-t-2 border-dashed border-[#024bf7] dark:border-[#3b82f6] ${idx === node.paths.length - 1 ? 'opacity-0' : ''}`} />
+                      <div className={`flex-1 border-t-2 border-dashed border-[#024bf7] dark:border-[#3b82f6] ${idx === agentPaths.length - 1 ? 'opacity-0' : ''}`} />
                     </div>
                   )}
                   
@@ -875,8 +900,7 @@ export default function App() {
                     {path.label}
                   </div>
                   <div className="h-12 connection-line-v" />
-                  {path.nodes.map((child, cIdx) => renderNode(child, { isFirst: cIdx === 0, hideLabel: cIdx === 0 }))}
-                  {path.nodes.length === 0 && (
+                  {path.node ? renderNode(path.node, { isFirst: true, hideLabel: true }) : (
                     <AddButton parentId={node.id} pathId={path.id} />
                   )}
                 </div>
@@ -884,11 +908,12 @@ export default function App() {
             </div>
           </div>
         )}
-        {/* Sequential Children */}
-        {node.children?.map((child, idx) => renderNode(child, { isFirst: false }))}
+
+        {/* Sequential Children - Only for non-branching nodes */}
+        {node.type !== 'agent' && node.type !== 'condition' && children.map((child, idx) => renderNode(child, { isFirst: false }))}
         
-        {/* Add Button for next sequential node - only if this is the end of the chain */}
-        {(!node.children || node.children.length === 0) && node.type !== 'ai-agent' && node.type !== 'condition' && (
+        {/* Add Button for next sequential node - only if this is the end of the chain and NOT a branching node */}
+        {children.length === 0 && node.type !== 'agent' && node.type !== 'condition' && (
           <AddButton parentId={node.id} />
         )}
       </div>
@@ -896,10 +921,17 @@ export default function App() {
   };
 
   const MinimapNode = ({ node }: { node: WorkflowNode }) => {
+    if (!workflow) return null;
     const colorClass = node.type === 'trigger' ? 'bg-indigo-500' : 
                       node.type === 'condition' ? 'bg-slate-700' :
                       node.type === 'foreach' ? 'bg-[#4a76a8]' :
-                      node.type === 'ai-agent' ? 'bg-pink-500' : 'bg-blue-500';
+                      node.type === 'agent' ? 'bg-pink-500' : 'bg-blue-500';
+
+    const children = node.to?.filter(c => !c.prompt).map(c => workflow[c.id]).filter(Boolean) as WorkflowNode[];
+    const trueBranch = node.to?.filter(c => c.prompt === 'True').map(c => workflow[c.id]).filter(Boolean) as WorkflowNode[];
+    const falseBranch = node.to?.filter(c => c.prompt === 'False').map(c => workflow[c.id]).filter(Boolean) as WorkflowNode[];
+    const loopBody = node.to?.filter(c => c.prompt === 'loop').map(c => workflow[c.id]).filter(Boolean) as WorkflowNode[];
+    const agentPaths = node.paths?.map(p => p.nodeId ? workflow[p.nodeId] : null).filter(Boolean) as WorkflowNode[];
 
     return (
       <div className="flex flex-col items-center">
@@ -909,33 +941,33 @@ export default function App() {
           <div className="flex gap-20 mb-4">
             <div className="flex flex-col items-center">
               <div className="w-32 h-8 bg-green-500 rounded-md mb-2" />
-              {node.branches?.true.map(child => <MinimapNode key={child.id} node={child} />)}
+              {trueBranch.map(child => <MinimapNode key={child.id} node={child} />)}
             </div>
             <div className="flex flex-col items-center">
               <div className="w-32 h-8 bg-red-500 rounded-md mb-2" />
-              {node.branches?.false.map(child => <MinimapNode key={child.id} node={child} />)}
+              {falseBranch.map(child => <MinimapNode key={child.id} node={child} />)}
             </div>
           </div>
         )}
 
         {node.type === 'foreach' && (
           <div className="p-4 border-2 border-dashed border-slate-300 rounded-xl mb-4 flex flex-col items-center">
-            {node.loopBody?.map(child => <MinimapNode key={child.id} node={child} />)}
+            {loopBody.map(child => <MinimapNode key={child.id} node={child} />)}
           </div>
         )}
 
-        {node.type === 'ai-agent' && (
+        {node.type === 'agent' && (
           <div className="flex gap-12 mb-4">
-            {node.paths?.map(path => (
-              <div key={path.id} className="flex flex-col items-center">
+            {agentPaths.map(child => (
+              <div key={child.id} className="flex flex-col items-center">
                 <div className="w-24 h-6 bg-slate-300 rounded-md mb-2" />
-                {path.nodes.map(child => <MinimapNode key={child.id} node={child} />)}
+                <MinimapNode node={child} />
               </div>
             ))}
           </div>
         )}
 
-        {node.children?.map(child => <MinimapNode key={child.id} node={child} />)}
+        {children.map(child => <MinimapNode key={child.id} node={child} />)}
       </div>
     );
   };
@@ -943,6 +975,13 @@ export default function App() {
   const AddButton = ({ parentId, branch, pathId }: { parentId: string | null; branch?: 'true' | 'false' | 'loop'; pathId?: string }) => {
     const buttonId = `${parentId || 'root'}-${branch || 'main'}-${pathId || 'none'}`;
     const isOpen = activePopoverId === buttonId;
+
+    const getPrompt = () => {
+      if (branch === 'true') return 'True';
+      if (branch === 'false') return 'False';
+      if (branch === 'loop') return 'loop';
+      return undefined;
+    };
 
     return (
       <div className="flex flex-col items-center relative">
@@ -972,7 +1011,7 @@ export default function App() {
               >
                 <button 
                   onClick={() => {
-                    setModalContext({ parentId, branch, pathId, pendingType: 'action' });
+                    setModalContext({ parentId, prompt: getPrompt(), pathId, pendingType: 'action' });
                     setIsModalOpen(true);
                     setActivePopoverId(null);
                   }}
@@ -985,7 +1024,7 @@ export default function App() {
                 </button>
                 <button 
                   onClick={() => {
-                    addNode('condition', undefined, { parentId, branch, pathId });
+                    addNode('condition', undefined, { parentId, prompt: getPrompt(), pathId });
                     setActivePopoverId(null);
                   }}
                   className="w-full px-4 py-2.5 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-3 transition-colors"
@@ -997,7 +1036,7 @@ export default function App() {
                 </button>
                 <button 
                   onClick={() => {
-                    addNode('ai-agent', undefined, { parentId, branch, pathId });
+                    addNode('agent', undefined, { parentId, prompt: getPrompt(), pathId });
                     setActivePopoverId(null);
                   }}
                   className="w-full px-4 py-2.5 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-3 transition-colors"
@@ -1009,7 +1048,7 @@ export default function App() {
                 </button>
                 <button 
                   onClick={() => {
-                    addNode('foreach', undefined, { parentId, branch, pathId });
+                    addNode('foreach', undefined, { parentId, prompt: getPrompt(), pathId });
                     setActivePopoverId(null);
                   }}
                   className="w-full px-4 py-2.5 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-3 transition-colors"
@@ -1022,7 +1061,7 @@ export default function App() {
                 <button 
                   onClick={() => {
                     setActivePopoverId(null);
-                    setConnectingFrom({ parentId });
+                    setConnectingFrom({ parentId, prompt: getPrompt(), pathId });
                   }}
                   className="w-full px-4 py-2.5 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-3 transition-colors"
                 >
@@ -1113,7 +1152,7 @@ export default function App() {
           ) : (
             <div className="flex flex-col items-center pointer-events-auto relative">
               <JumpConnections />
-              {renderNode(workflow, { isFirst: true })}
+              {renderNode(workflow['start'], { isFirst: true })}
             </div>
           )}
         </div>
@@ -1190,7 +1229,7 @@ export default function App() {
               <div className="relative w-full h-full bg-slate-50/50 dark:bg-slate-800/50 rounded-lg overflow-hidden border border-slate-100 dark:border-slate-800">
                 {/* Simplified Workflow Preview */}
                 <div className="absolute inset-0 flex flex-col items-center pt-4 scale-[0.15] origin-top">
-                  <MinimapNode node={workflow} />
+                  <MinimapNode node={workflow['start']} />
                 </div>
                 
                 {/* Viewport Indicator */}
@@ -1313,7 +1352,7 @@ export default function App() {
                   value={selectedNode.label}
                   onChange={(e) => {
                     const updatedWorkflow = JSON.parse(JSON.stringify(workflow));
-                    const node = findNode(updatedWorkflow, selectedNode.id);
+                    const node = updatedWorkflow[selectedNode.id];
                     if (node) node.label = e.target.value;
                     setWorkflow(updatedWorkflow);
                   }}
@@ -1321,17 +1360,25 @@ export default function App() {
                 />
               </section>
 
-              {selectedNode.type === 'ai-agent' && (
+              {selectedNode.type === 'agent' && (
                 <section className="space-y-6">
                   <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">AI Agent prompt</label>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">AI AGENT PROMPT</label>
                     <textarea 
                       className="w-full h-40 px-4 py-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm leading-relaxed dark:text-slate-200"
                       placeholder="You're a support agent resolving customer queries..."
+                      value={selectedNode.prompt || ''}
+                      onChange={(e) => {
+                        const updatedWorkflow = { ...workflow };
+                        if (updatedWorkflow[selectedNode.id]) {
+                          updatedWorkflow[selectedNode.id].prompt = e.target.value;
+                          setWorkflow(updatedWorkflow);
+                        }
+                      }}
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">Exit conditions / Paths</label>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">EXIT CONDITIONS / PATHS</label>
                     <div className="space-y-3">
                       {selectedNode.paths?.map((path, idx) => (
                         <div key={path.id} className="flex items-center gap-2">
@@ -1339,24 +1386,25 @@ export default function App() {
                             type="text"
                             value={path.label}
                             onChange={(e) => {
-                              const updatedWorkflow = JSON.parse(JSON.stringify(workflow));
-                              const node = findNode(updatedWorkflow, selectedNode.id);
+                              const updatedWorkflow = { ...workflow };
+                              const node = updatedWorkflow[selectedNode.id];
                               if (node && node.paths) {
-                                node.paths[idx].label = e.target.value;
+                                const p = node.paths.find(p => p.id === path.id);
+                                if (p) p.label = e.target.value;
+                                setWorkflow(updatedWorkflow);
                               }
-                              setWorkflow(updatedWorkflow);
                             }}
                             className="flex-1 px-3 py-2 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg text-xs dark:text-slate-200"
                             placeholder={`Path ${idx + 1}`}
                           />
                           <button 
                             onClick={() => {
-                              const updatedWorkflow = JSON.parse(JSON.stringify(workflow));
-                              const node = findNode(updatedWorkflow, selectedNode.id);
+                              const updatedWorkflow = { ...workflow };
+                              const node = updatedWorkflow[selectedNode.id];
                               if (node && node.paths) {
-                                node.paths.splice(idx, 1);
+                                node.paths = node.paths.filter(p => p.id !== path.id);
+                                setWorkflow(updatedWorkflow);
                               }
-                              setWorkflow(updatedWorkflow);
                             }}
                             className="p-2 text-slate-400 hover:text-red-500"
                           >
@@ -1368,17 +1416,20 @@ export default function App() {
                   </div>
                   <button 
                     onClick={() => {
-                      const updatedWorkflow = JSON.parse(JSON.stringify(workflow));
-                      const node = findNode(updatedWorkflow, selectedNode.id);
+                      const updatedWorkflow = { ...workflow };
+                      const node = updatedWorkflow[selectedNode.id];
                       if (node) {
                         if (!node.paths) node.paths = [];
-                        node.paths.push({ id: uuidv4(), label: `Path ${node.paths.length + 1}`, nodes: [] });
+                        node.paths.push({ 
+                          id: uuidv4(), 
+                          label: `Path ${node.paths.length + 1}` 
+                        });
+                        setWorkflow(updatedWorkflow);
                       }
-                      setWorkflow(updatedWorkflow);
                     }}
-                    className="w-full py-2.5 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-400 hover:border-blue-500 hover:text-blue-500 transition-all"
+                    className="w-full py-4 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-400 hover:border-blue-500 hover:text-blue-500 transition-all flex items-center justify-center gap-2"
                   >
-                    + Add path
+                    <Plus size={14} /> Add path
                   </button>
                 </section>
               )}
@@ -1441,7 +1492,7 @@ export default function App() {
               </div>
 
               <div className="flex-1 overflow-auto px-10 pb-10 space-y-8">
-                {(!workflow || isChangingTrigger || (changingNodeId && findNode(workflow, changingNodeId)?.type === 'trigger')) ? (
+                {(!workflow || isChangingTrigger || (changingNodeId && workflow[changingNodeId]?.type === 'trigger')) ? (
                   // Group triggers by category
                   Object.entries(
                     TRIGGER_TYPES.reduce((acc, t) => {
@@ -1482,7 +1533,7 @@ export default function App() {
                       </div>
                     </div>
                   ))
-                ) : (modalContext?.pendingType === 'action' || (changingNodeId && findNode(workflow, changingNodeId)?.type === 'action')) ? (
+                ) : (modalContext?.pendingType === 'action' || (changingNodeId && workflow[changingNodeId]?.type === 'action')) ? (
                   // Group actions by category
                   Object.entries(
                     ACTION_TYPES.reduce((acc, a) => {

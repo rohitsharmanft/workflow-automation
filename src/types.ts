@@ -24,4 +24,4 @@ export type Workflow = Record<string, WorkflowNode>;
 
 export type TriggerType = 'http' | 'schedule' | 'webhook';
 export type ActionType = 'email' | 'slack' | 'database' | 'api';
-export type AIAgentType = 'summarizer' | 'classifier' | 'translator';
+export type AIAgentType = 'summarizer' | 'classifier' | 'translator'; 

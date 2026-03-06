@@ -45,7 +45,13 @@ export default function App() {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activePopoverId, setActivePopoverId] = useState<string | null>(null);
-  const [modalContext, setModalContext] = useState<{ parentId: string | null; prompt?: string; pathId?: string; pendingType?: NodeType } | null>(null);
+  const [modalContext, setModalContext] = useState<{ 
+    parentId: string | null; 
+    prompt?: string; 
+    pathId?: string; 
+    pendingType?: NodeType;
+    insertBetween?: { childId: string };
+  } | null>(null);
 
   const [isChangingTrigger, setIsChangingTrigger] = useState(false);
   const [changingNodeId, setChangingNodeId] = useState<string | null>(null);
@@ -56,7 +62,7 @@ export default function App() {
   const [collapsedCategories, setCollapsedCategories] = useState<string[]>([]);
 
   // Zoom and Pan state
-  const [zoom, setZoom] = useState(1);
+  const [zoom, setZoom] = useState(0.6);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
@@ -254,7 +260,7 @@ export default function App() {
     Object.values(workflow).forEach(node => {
       node.to?.forEach(conn => {
         // Filter out connections that are already rendered in the tree structure
-        const isSequential = !conn.prompt && (node.type !== 'agent' && node.type !== 'condition' && node.type !== 'foreach');
+        const isSequential = !conn.prompt;
         const isConditionBranch = (conn.prompt === 'True' || conn.prompt === 'False') && node.type === 'condition';
         const isLoopBody = conn.prompt === 'loop' && node.type === 'foreach';
         const isAgentPath = node.type === 'agent' && node.paths?.some(p => p.nodeId === conn.id);
@@ -430,16 +436,60 @@ export default function App() {
     const nodeId = uuidv4();
     
     const getLabel = (type: NodeType, subType?: string) => {
+      let baseLabel = '';
       if (type === 'trigger' && subType) {
-        return TRIGGER_TYPES.find(t => t.id === subType)?.label || type.toUpperCase();
+        baseLabel = TRIGGER_TYPES.find(t => t.id === subType)?.label || type.toUpperCase();
+      } else if (type === 'action' && subType) {
+        baseLabel = ACTION_TYPES.find(a => a.id === subType)?.label || type.toUpperCase();
+      } else if (type === 'agent') {
+        baseLabel = 'AI AGENT';
+      } else if (type === 'condition') {
+        baseLabel = 'CONDITION';
+      } else if (type === 'foreach') {
+        baseLabel = 'FOREACH';
+      } else {
+        baseLabel = type.toUpperCase();
       }
-      if (type === 'action' && subType) {
-        return ACTION_TYPES.find(a => a.id === subType)?.label || type.toUpperCase();
-      }
-      if (type === 'agent') return 'AI AGENT';
-      if (type === 'condition') return 'CONDITION';
-      if (type === 'foreach') return 'FOREACH';
-      return type.toUpperCase();
+
+      if (!workflow) return baseLabel;
+
+      // Find all existing labels that match the base label pattern
+      // Exclude the node being changed if we are in change mode
+      const existingLabels = Object.entries(workflow)
+        .filter(([id]) => {
+          if (isChangingTrigger && id === 'start') return false;
+          if (changingNodeId && id === changingNodeId) return false;
+          return true;
+        })
+        .map(([, n]) => n.label);
+      
+      // Check if the base label itself exists or if versions exist
+      const sameBaseLabels = existingLabels.filter(l => 
+        l === baseLabel || l.startsWith(`${baseLabel} v`)
+      );
+
+      if (sameBaseLabels.length === 0) return baseLabel;
+
+      // Find the highest version number
+      let maxVersion = 1;
+      sameBaseLabels.forEach(label => {
+        if (label === baseLabel) {
+          maxVersion = Math.max(maxVersion, 1);
+        } else {
+          const match = label.match(new RegExp(`^${baseLabel} v(\\d+)$`));
+          if (match) {
+            maxVersion = Math.max(maxVersion, parseInt(match[1]));
+          }
+        }
+      });
+
+      // If the base label exists but no versioned ones, the first one was effectively v1
+      // The user wants v1, v2, v3...
+      // If we want the first one to be "Name v1", we need to handle that.
+      // But usually people prefer "Name" then "Name v2".
+      // Let's stick to the user's request: "v1 v2 or v3"
+      
+      return `${baseLabel} v${maxVersion + 1}`;
     };
 
     if (changingNodeId && workflow) {
@@ -508,7 +558,7 @@ export default function App() {
     if (!workflow) {
       setWorkflow({ start: { ...newNode, id: 'start', type: 'trigger' } });
     } else if (context) {
-      const { parentId, prompt, pathId } = context;
+      const { parentId, prompt, pathId, insertBetween } = context;
       const updatedWorkflow = { ...workflow };
       updatedWorkflow[nodeId] = newNode;
       
@@ -516,10 +566,26 @@ export default function App() {
         const parent = updatedWorkflow[parentId!];
         if (pathId && parent.paths) {
           const path = parent.paths.find(p => p.id === pathId);
-          if (path) path.nodeId = nodeId;
+          if (path) {
+            if (insertBetween) {
+              newNode.to = [{ id: insertBetween.childId }];
+            }
+            path.nodeId = nodeId;
+          }
         } else {
           if (!parent.to) parent.to = [];
-          parent.to.push({ id: nodeId, prompt });
+          if (insertBetween) {
+            const connIdx = parent.to.findIndex(c => c.id === insertBetween.childId && (c.prompt === prompt || (!c.prompt && !prompt)));
+            if (connIdx !== -1) {
+              newNode.to = [{ id: insertBetween.childId }];
+              parent.to[connIdx].id = nodeId;
+            } else {
+              // Fallback if connection not found
+              parent.to.push({ id: nodeId, prompt });
+            }
+          } else {
+            parent.to.push({ id: nodeId, prompt });
+          }
         }
       }
       
@@ -572,9 +638,9 @@ export default function App() {
     }
   };
 
-  const renderNode = (node: WorkflowNode, options: { isFirst?: boolean; hideLabel?: boolean } = {}) => {
+  const renderNode = (node: WorkflowNode, options: { isFirst?: boolean; hideLabel?: boolean; parentId?: string | null; prompt?: string; pathId?: string } = {}) => {
     if (!workflow) return null;
-    const { isFirst = false, hideLabel = false } = options;
+    const { isFirst = false, hideLabel = false, parentId = null, prompt = undefined, pathId = undefined } = options;
     const Icon = NODE_ICONS[node.type] || Play;
     const isSelected = selectedNodeId === node.id;
 
@@ -587,6 +653,8 @@ export default function App() {
       node: p.nodeId ? workflow[p.nodeId] : undefined
     })) || [];
 
+    const isAnyChildPopoverOpen = activePopoverId?.includes(node.id);
+
     return (
       <div 
         key={node.id} 
@@ -594,14 +662,24 @@ export default function App() {
           if (el) nodeRefs.current[node.id] = el;
           else delete nodeRefs.current[node.id];
         }}
-        className="flex flex-col items-center relative"
+        className={`flex flex-col items-center relative ${isAnyChildPopoverOpen ? 'z-50' : ''}`}
       >
         {/* Connection Line from above */}
         {!isFirst && !hideLabel && (
-          <div className="flex flex-col items-center">
-            <div className="h-6 connection-line-v" />
-            <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2">Then</div>
-            <div className="h-6 connection-line-v" />
+          <div className="flex flex-col items-center group/connection relative">
+            <div className="h-20 connection-line-v" />
+            
+            {parentId && (
+              <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover/connection:opacity-100 transition-opacity z-30 group-hover/connection:z-50 ${activePopoverId?.includes(`-${node.id}`) ? 'opacity-100 z-[60]' : ''}`}>
+                <AddButton 
+                  parentId={parentId} 
+                  branch={prompt === 'True' ? 'true' : prompt === 'False' ? 'false' : prompt === 'loop' ? 'loop' : undefined}
+                  pathId={pathId}
+                  insertBetween={{ childId: node.id }}
+                  variant="insert"
+                />
+              </div>
+            )}
           </div>
         )}
 
@@ -611,7 +689,7 @@ export default function App() {
           </div>
         )}
 
-        {hideLabel && <div className="h-6 connection-line-v" />}
+        {hideLabel && <div className="h-10 connection-line-v" />}
 
         {/* Node Card */}
         {node.type !== 'foreach' && node.type !== 'condition' ? (
@@ -707,17 +785,7 @@ export default function App() {
                           <Trash2 size={12} />
                           Delete Node
                         </button>
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setConnectingFrom({ parentId: node.id });
-                            setNodeMenuId(null);
-                          }}
-                          className="w-full px-3 py-2 text-left text-[11px] font-bold text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors flex items-center gap-2"
-                        >
-                          <ArrowRight size={12} />
-                          Connect to...
-                        </button>
+
                       </motion.div>
                     </>
                   )}
@@ -779,8 +847,8 @@ export default function App() {
                 Loop Start
               </div>
               
-              <div className="w-fit min-w-full border-2 border-dashed border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 rounded-[3rem] p-8 shadow-inner min-h-[200px] flex flex-col items-center">
-                {loopBody.map((child, idx) => renderNode(child, { isFirst: idx === 0, hideLabel: idx === 0 }))}
+              <div className={`w-fit min-w-full border-2 border-dashed border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 rounded-[3rem] p-8 shadow-inner min-h-[200px] flex flex-col items-center relative transition-all ${activePopoverId?.includes(`${node.id}-loop`) ? 'z-[60]' : 'hover:z-40'}`}>
+                {loopBody.map((child, idx) => renderNode(child, { isFirst: idx === 0, hideLabel: idx === 0, parentId: node.id, prompt: 'loop' }))}
                 {(!loopBody || loopBody.length === 0) && (
                   <AddButton parentId={node.id} branch="loop" />
                 )}
@@ -852,12 +920,12 @@ export default function App() {
               </svg>
 
               {/* True Branch */}
-              <div className="flex-1 flex flex-col items-center z-20">
+              <div className={`flex-1 flex flex-col items-center relative transition-all ${activePopoverId?.includes(`${node.id}-true`) ? 'z-[60]' : 'z-20 hover:z-40'}`}>
                 <div className="bg-emerald-500 text-white px-10 py-3 rounded-full text-[12px] font-black uppercase tracking-[0.2em] flex items-center gap-2 shadow-lg shadow-emerald-500/20 mb-4 transform -translate-y-2">
                   True <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
                 </div>
                 <div className="w-full border-2 border-dashed border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 rounded-[3rem] p-6 shadow-inner min-h-[200px] flex flex-col items-center">
-                   {trueBranch.map((child, idx) => renderNode(child, { isFirst: idx === 0, hideLabel: idx === 0 }))}
+                   {trueBranch.map((child, idx) => renderNode(child, { isFirst: idx === 0, hideLabel: idx === 0, parentId: node.id, prompt: 'True' }))}
                    {(!trueBranch || trueBranch.length === 0) && (
                      <AddButton parentId={node.id} branch="true" />
                    )}
@@ -865,12 +933,12 @@ export default function App() {
               </div>
 
               {/* False Branch */}
-              <div className="flex-1 flex flex-col items-center z-20">
+              <div className={`flex-1 flex flex-col items-center relative transition-all ${activePopoverId?.includes(`${node.id}-false`) ? 'z-[60]' : 'z-20 hover:z-40'}`}>
                 <div className="bg-rose-500 text-white px-10 py-3 rounded-full text-[12px] font-black uppercase tracking-[0.2em] flex items-center gap-2 shadow-lg shadow-rose-500/20 mb-4 transform -translate-y-2">
                   False <div className="w-1.5 h-1.5 bg-white rounded-full opacity-60" />
                 </div>
                 <div className="w-full border-2 border-dashed border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 rounded-[3rem] p-6 shadow-inner min-h-[200px] flex flex-col items-center">
-                   {falseBranch.map((child, idx) => renderNode(child, { isFirst: idx === 0, hideLabel: idx === 0 }))}
+                   {falseBranch.map((child, idx) => renderNode(child, { isFirst: idx === 0, hideLabel: idx === 0, parentId: node.id, prompt: 'False' }))}
                    {(!falseBranch || falseBranch.length === 0) && (
                      <AddButton parentId={node.id} branch="false" />
                    )}
@@ -883,10 +951,10 @@ export default function App() {
         {/* Agent Paths */}
         {node.type === 'agent' && (
           <div className="flex flex-col items-center">
-            <div className="h-6 connection-line-v" />
+            <div className="h-10 connection-line-v" />
             <div className="flex justify-center relative">
               {agentPaths.map((path, idx) => (
-                <div key={path.id} className="flex flex-col items-center relative z-10 min-w-[20rem] px-8">
+                <div key={path.id} className={`flex flex-col items-center relative transition-all min-w-[20rem] px-8 ${activePopoverId?.includes(path.id) ? 'z-[60]' : 'z-10 hover:z-40'}`}>
                   {/* Horizontal Line Segments to connect paths */}
                   {agentPaths.length > 1 && (
                     <div className="absolute top-0 left-0 right-0 flex">
@@ -895,12 +963,12 @@ export default function App() {
                     </div>
                   )}
                   
-                  <div className="h-6 connection-line-v opacity-50" />
+                  <div className="h-10 connection-line-v opacity-50" />
                   <div className="px-3 py-1 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-bold rounded-full shadow-sm">
                     {path.label}
                   </div>
-                  <div className="h-12 connection-line-v" />
-                  {path.node ? renderNode(path.node, { isFirst: true, hideLabel: true }) : (
+                  <div className="h-20 connection-line-v" />
+                  {path.node ? renderNode(path.node, { isFirst: true, hideLabel: true, parentId: node.id, pathId: path.id }) : (
                     <AddButton parentId={node.id} pathId={path.id} />
                   )}
                 </div>
@@ -909,11 +977,11 @@ export default function App() {
           </div>
         )}
 
-        {/* Sequential Children - Only for non-branching nodes */}
-        {node.type !== 'agent' && node.type !== 'condition' && children.map((child, idx) => renderNode(child, { isFirst: false }))}
+        {/* Sequential Children */}
+        {children.map((child, idx) => renderNode(child, { isFirst: false, parentId: node.id }))}
         
-        {/* Add Button for next sequential node - only if this is the end of the chain and NOT a branching node */}
-        {children.length === 0 && node.type !== 'agent' && node.type !== 'condition' && (
+        {/* Add Button for next sequential node - only if this is the end of the chain */}
+        {children.length === 0 && (
           <AddButton parentId={node.id} />
         )}
       </div>
@@ -972,8 +1040,14 @@ export default function App() {
     );
   };
 
-  const AddButton = ({ parentId, branch, pathId }: { parentId: string | null; branch?: 'true' | 'false' | 'loop'; pathId?: string }) => {
-    const buttonId = `${parentId || 'root'}-${branch || 'main'}-${pathId || 'none'}`;
+  const AddButton = ({ parentId, branch, pathId, insertBetween, variant = 'append' }: { 
+    parentId: string | null; 
+    branch?: 'true' | 'false' | 'loop'; 
+    pathId?: string;
+    insertBetween?: { childId: string };
+    variant?: 'append' | 'insert';
+  }) => {
+    const buttonId = `${parentId || 'root'}-${branch || 'main'}-${pathId || 'none'}-${insertBetween?.childId || 'none'}`;
     const isOpen = activePopoverId === buttonId;
 
     const getPrompt = () => {
@@ -984,14 +1058,14 @@ export default function App() {
     };
 
     return (
-      <div className="flex flex-col items-center relative">
-        <div className="h-10 connection-line-v" />
+      <div className={`flex flex-col items-center relative ${isOpen ? 'z-[60]' : 'z-20'}`}>
+        {variant === 'append' && <div className="h-16 connection-line-v" />}
         <button
           onClick={(e) => {
             e.stopPropagation();
             setActivePopoverId(isOpen ? null : buttonId);
           }}
-          className="w-10 h-10 rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-blue-500 hover:border-blue-500 hover:scale-110 transition-all flex items-center justify-center shadow-md group z-20"
+          className="w-10 h-10 flex-shrink-0 rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-blue-500 hover:border-blue-500 hover:scale-110 transition-all flex items-center justify-center shadow-md group z-30"
         >
           <Plus size={20} className={`${isOpen ? 'rotate-45' : ''} transition-transform`} />
         </button>
@@ -1007,11 +1081,11 @@ export default function App() {
                 initial={{ opacity: 0, y: 10, scale: 0.95 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                className="absolute top-full mt-2 left-1/2 -translate-x-1/2 w-56 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-100 dark:border-slate-800 py-2 z-40 overflow-hidden"
+                className="absolute top-full mt-2 left-1/2 -translate-x-1/2 w-56 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-100 dark:border-slate-800 py-2 z-[100] overflow-hidden"
               >
                 <button 
                   onClick={() => {
-                    setModalContext({ parentId, prompt: getPrompt(), pathId, pendingType: 'action' });
+                    setModalContext({ parentId, prompt: getPrompt(), pathId, pendingType: 'action', insertBetween });
                     setIsModalOpen(true);
                     setActivePopoverId(null);
                   }}
@@ -1024,7 +1098,7 @@ export default function App() {
                 </button>
                 <button 
                   onClick={() => {
-                    addNode('condition', undefined, { parentId, prompt: getPrompt(), pathId });
+                    addNode('condition', undefined, { parentId, prompt: getPrompt(), pathId, insertBetween });
                     setActivePopoverId(null);
                   }}
                   className="w-full px-4 py-2.5 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-3 transition-colors"
@@ -1036,7 +1110,7 @@ export default function App() {
                 </button>
                 <button 
                   onClick={() => {
-                    addNode('agent', undefined, { parentId, prompt: getPrompt(), pathId });
+                    addNode('agent', undefined, { parentId, prompt: getPrompt(), pathId, insertBetween });
                     setActivePopoverId(null);
                   }}
                   className="w-full px-4 py-2.5 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-3 transition-colors"
@@ -1048,7 +1122,7 @@ export default function App() {
                 </button>
                 <button 
                   onClick={() => {
-                    addNode('foreach', undefined, { parentId, prompt: getPrompt(), pathId });
+                    addNode('foreach', undefined, { parentId, prompt: getPrompt(), pathId, insertBetween });
                     setActivePopoverId(null);
                   }}
                   className="w-full px-4 py-2.5 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-3 transition-colors"
@@ -1058,18 +1132,7 @@ export default function App() {
                   </div>
                   <span className="font-medium">Foreach loop</span>
                 </button>
-                <button 
-                  onClick={() => {
-                    setActivePopoverId(null);
-                    setConnectingFrom({ parentId, prompt: getPrompt(), pathId });
-                  }}
-                  className="w-full px-4 py-2.5 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-3 transition-colors"
-                >
-                  <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-500 dark:text-blue-400 flex items-center justify-center">
-                    <ArrowRight size={16} />
-                  </div>
-                  <span className="font-medium">Connect to existing node</span>
-                </button>
+
               </motion.div>
             </>
           )}
@@ -1123,12 +1186,12 @@ export default function App() {
         />
 
         <div 
-          className="absolute transition-transform duration-75 ease-out origin-center"
+          className="absolute transition-transform duration-75 ease-out"
           style={{
-            transform: `translate(${position.x}px, ${position.y}px) scale(${zoom})`,
+            transform: `translate(calc(-50% + ${position.x}px), calc(-50% + ${position.y}px)) scale(${zoom})`,
             left: '50%',
-            top: '10%',
-            transformOrigin: 'top center'
+            top: '50%',
+            transformOrigin: 'center center'
           }}
         >
           {!workflow ? (
@@ -1169,7 +1232,7 @@ export default function App() {
           <div className="w-px h-6 bg-slate-200 dark:bg-slate-800 mx-1" />
           <button 
             onClick={() => {
-              setZoom(1);
+              setZoom(0.6);
               setPosition({ x: 0, y: 0 });
             }}
             className="p-2 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg text-slate-500 dark:text-slate-400 transition-colors"

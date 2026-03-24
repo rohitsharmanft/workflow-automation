@@ -50,7 +50,6 @@ export default function App() {
     prompt?: string; 
     pathId?: string; 
     pendingType?: NodeType;
-    insertBetween?: { childId: string };
   } | null>(null);
 
   const [isChangingTrigger, setIsChangingTrigger] = useState(false);
@@ -79,11 +78,26 @@ export default function App() {
       const migrated: Workflow = {};
       Object.keys(data).forEach(id => {
         const node = data[id];
+        const nodeType = node.type === 'ai-agent' ? 'agent' : node.type;
         migrated[id] = {
           ...node,
-          type: node.type === 'ai-agent' ? 'agent' : node.type,
+          type: nodeType,
           to: node.to || []
         };
+        
+        if ((nodeType === 'agent' || nodeType === 'trigger') && (!node.paths || node.paths.length === 0)) {
+          migrated[id].paths = nodeType === 'trigger' 
+            ? [{ id: uuidv4(), label: 'Path 1' }]
+            : [{ id: uuidv4(), label: 'Path 1' }, { id: uuidv4(), label: 'Path 2' }];
+          
+          // If it had sequential children, move the first one to Path 1
+          const sequentialChild = node.to?.find((c: any) => !c.prompt);
+          if (sequentialChild) {
+            migrated[id].paths[0].nodeId = sequentialChild.id;
+            // Remove from sequential 'to'
+            migrated[id].to = migrated[id].to.filter((c: any) => c.id !== sequentialChild.id);
+          }
+        }
       });
       return migrated;
     }
@@ -263,7 +277,7 @@ export default function App() {
         const isSequential = !conn.prompt;
         const isConditionBranch = (conn.prompt === 'True' || conn.prompt === 'False') && node.type === 'condition';
         const isLoopBody = conn.prompt === 'loop' && node.type === 'foreach';
-        const isAgentPath = node.type === 'agent' && node.paths?.some(p => p.nodeId === conn.id);
+        const isAgentPath = (node.type === 'agent' || node.type === 'trigger') && node.paths?.some(p => p.nodeId === conn.id);
 
         if (!isSequential && !isConditionBranch && !isLoopBody && !isAgentPath) {
           connections.push({ fromId: node.id, toId: conn.id, prompt: conn.prompt });
@@ -443,6 +457,8 @@ export default function App() {
         baseLabel = ACTION_TYPES.find(a => a.id === subType)?.label || type.toUpperCase();
       } else if (type === 'agent') {
         baseLabel = 'AI AGENT';
+      } else if (type === 'wait') {
+        baseLabel = 'WAIT';
       } else if (type === 'condition') {
         baseLabel = 'CONDITION';
       } else if (type === 'foreach') {
@@ -510,11 +526,10 @@ export default function App() {
         
         if (type === 'trigger') updatedWorkflow[changingNodeId].triggerKey = subType;
         if (type === 'action') updatedWorkflow[changingNodeId].actionKey = subType;
-        if (type === 'agent') {
-          updatedWorkflow[changingNodeId].paths = [
-            { id: uuidv4(), label: 'Path 1' },
-            { id: uuidv4(), label: 'Path 2' }
-          ];
+        if (type === 'trigger' || type === 'agent') {
+          updatedWorkflow[changingNodeId].paths = type === 'trigger'
+            ? [{ id: uuidv4(), label: 'Path 1' }]
+            : [{ id: uuidv4(), label: 'Path 1' }, { id: uuidv4(), label: 'Path 2' }];
         }
       }
       setWorkflow(updatedWorkflow);
@@ -527,9 +542,14 @@ export default function App() {
     if (isChangingTrigger && workflow) {
       const updatedWorkflow = { ...workflow };
       if (updatedWorkflow['start']) {
-        updatedWorkflow['start'].type = type;
-        updatedWorkflow['start'].triggerKey = subType;
-        updatedWorkflow['start'].label = getLabel(type, subType);
+        const node = updatedWorkflow['start'];
+        node.type = type;
+        node.triggerKey = subType;
+        node.label = getLabel(type, subType);
+        
+        if (!node.paths || node.paths.length === 0) {
+          node.paths = [{ id: uuidv4(), label: 'Path 1' }];
+        }
       }
       setWorkflow(updatedWorkflow);
       setIsChangingTrigger(false);
@@ -546,19 +566,25 @@ export default function App() {
 
     if (type === 'action') {
       newNode.actionKey = subType;
-    } else if (type === 'agent') {
-      newNode.prompt = "You're a helpful AI agent...";
-      newNode.skills = {};
-      newNode.paths = [
-        { id: uuidv4(), label: 'Path 1' },
-        { id: uuidv4(), label: 'Path 2' }
-      ];
+    } else if (type === 'agent' || type === 'trigger') {
+      if (type === 'agent') {
+        newNode.prompt = "You're a helpful AI agent...";
+        newNode.skills = {};
+        newNode.paths = [
+          { id: uuidv4(), label: 'Path 1' },
+          { id: uuidv4(), label: 'Path 2' }
+        ];
+      } else {
+        newNode.paths = [
+          { id: uuidv4(), label: 'Path 1' }
+        ];
+      }
     }
 
     if (!workflow) {
       setWorkflow({ start: { ...newNode, id: 'start', type: 'trigger' } });
     } else if (context) {
-      const { parentId, prompt, pathId, insertBetween } = context;
+      const { parentId, prompt, pathId } = context;
       const updatedWorkflow = { ...workflow };
       updatedWorkflow[nodeId] = newNode;
       
@@ -567,25 +593,11 @@ export default function App() {
         if (pathId && parent.paths) {
           const path = parent.paths.find(p => p.id === pathId);
           if (path) {
-            if (insertBetween) {
-              newNode.to = [{ id: insertBetween.childId }];
-            }
             path.nodeId = nodeId;
           }
         } else {
           if (!parent.to) parent.to = [];
-          if (insertBetween) {
-            const connIdx = parent.to.findIndex(c => c.id === insertBetween.childId && (c.prompt === prompt || (!c.prompt && !prompt)));
-            if (connIdx !== -1) {
-              newNode.to = [{ id: insertBetween.childId }];
-              parent.to[connIdx].id = nodeId;
-            } else {
-              // Fallback if connection not found
-              parent.to.push({ id: nodeId, prompt });
-            }
-          } else {
-            parent.to.push({ id: nodeId, prompt });
-          }
+          parent.to.push({ id: nodeId, prompt });
         }
       }
       
@@ -598,11 +610,6 @@ export default function App() {
 
   const deleteNode = (id: string) => {
     if (!workflow) return;
-    if (id === 'start') {
-      setWorkflow(null);
-      setSelectedNodeId(null);
-      return;
-    }
 
     const updatedWorkflow = { ...workflow };
     delete updatedWorkflow[id];
@@ -668,18 +675,6 @@ export default function App() {
         {!isFirst && !hideLabel && (
           <div className="flex flex-col items-center group/connection relative">
             <div className="h-20 connection-line-v" />
-            
-            {parentId && (
-              <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover/connection:opacity-100 transition-opacity z-30 group-hover/connection:z-50 ${activePopoverId?.includes(`-${node.id}`) ? 'opacity-100 z-[60]' : ''}`}>
-                <AddButton 
-                  parentId={parentId} 
-                  branch={prompt === 'True' ? 'true' : prompt === 'False' ? 'false' : prompt === 'loop' ? 'loop' : undefined}
-                  pathId={pathId}
-                  insertBetween={{ childId: node.id }}
-                  variant="insert"
-                />
-              </div>
-            )}
           </div>
         )}
 
@@ -721,7 +716,9 @@ export default function App() {
                   ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400'
                   : node.type === 'agent'
                     ? 'bg-fuchsia-50 dark:bg-fuchsia-900/30 text-fuchsia-600 dark:text-fuchsia-400'
-                    : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+                    : node.type === 'wait'
+                      ? 'bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400'
+                      : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
             }`}>
               <Icon size={24} />
             </div>
@@ -729,6 +726,7 @@ export default function App() {
               <p className={`text-[10px] font-black uppercase tracking-[0.2em] mb-1 ${
                 node.type === 'trigger' ? 'text-teal-500' : 
                 node.type === 'agent' ? 'text-fuchsia-500' : 
+                node.type === 'wait' ? 'text-amber-500' : 
                 'text-slate-400'
               }`}>{node.type === 'agent' ? 'AI-AGENT' : node.type}</p>
               <p className="text-base font-bold text-slate-800 dark:text-slate-100 truncate">{node.label}</p>
@@ -890,19 +888,16 @@ export default function App() {
                 </div>
               </div>
               <div className="flex items-center gap-2 text-slate-400">
-                <div className="p-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg transition-colors">
-                  <MoreHorizontal size={18} />
-                </div>
               </div>
             </motion.div>
 
             {/* Main Container */}
             <div className="relative -mt-12 pt-28 pb-12 px-8 border border-slate-200 dark:border-slate-800 rounded-[4rem] bg-white dark:bg-slate-900/30 flex gap-12 w-fit min-w-[36rem] z-10 backdrop-blur-sm">
               
-              {/* Curved SVG Lines */}
+              {/* Orthogonal SVG Lines */}
               <svg className="absolute top-0 left-0 w-full h-28 pointer-events-none overflow-visible">
                 <path 
-                  d={`M ${50}% 48 C ${50}% 80, ${25}% 80, ${25}% 112`} 
+                  d={`M 50% 48 L 50% 80 L 25% 80 L 25% 112`} 
                   fill="none" 
                   stroke={isDarkMode ? '#3b82f6' : '#024bf7'} 
                   strokeWidth="2" 
@@ -910,7 +905,7 @@ export default function App() {
                   strokeLinecap="round"
                 />
                 <path 
-                  d={`M ${50}% 48 C ${50}% 80, ${75}% 80, ${75}% 112`} 
+                  d={`M 50% 48 L 50% 80 L 75% 80 L 75% 112`} 
                   fill="none" 
                   stroke={isDarkMode ? '#3b82f6' : '#024bf7'} 
                   strokeWidth="2" 
@@ -948,8 +943,8 @@ export default function App() {
           </div>
         )}
 
-        {/* Agent Paths */}
-        {node.type === 'agent' && (
+        {/* Agent/Trigger Paths */}
+        {(node.type === 'agent' || node.type === 'trigger') && (
           <div className="flex flex-col items-center">
             <div className="h-10 connection-line-v" />
             <div className="flex justify-center relative">
@@ -967,7 +962,6 @@ export default function App() {
                   <div className="px-3 py-1 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-bold rounded-full shadow-sm">
                     {path.label}
                   </div>
-                  <div className="h-20 connection-line-v" />
                   {path.node ? renderNode(path.node, { isFirst: true, hideLabel: true, parentId: node.id, pathId: path.id }) : (
                     <AddButton parentId={node.id} pathId={path.id} />
                   )}
@@ -978,10 +972,10 @@ export default function App() {
         )}
 
         {/* Sequential Children */}
-        {children.map((child, idx) => renderNode(child, { isFirst: false, parentId: node.id }))}
+        {node.type !== 'agent' && node.type !== 'trigger' && node.type !== 'condition' && node.type !== 'foreach' && children.map((child, idx) => renderNode(child, { isFirst: false, parentId: node.id }))}
         
         {/* Add Button for next sequential node - only if this is the end of the chain */}
-        {children.length === 0 && (
+        {node.type !== 'agent' && node.type !== 'trigger' && node.type !== 'condition' && node.type !== 'foreach' && children.length === 0 && (
           <AddButton parentId={node.id} />
         )}
       </div>
@@ -993,7 +987,8 @@ export default function App() {
     const colorClass = node.type === 'trigger' ? 'bg-indigo-500' : 
                       node.type === 'condition' ? 'bg-slate-700' :
                       node.type === 'foreach' ? 'bg-[#4a76a8]' :
-                      node.type === 'agent' ? 'bg-pink-500' : 'bg-blue-500';
+                      node.type === 'agent' ? 'bg-pink-500' :
+                      node.type === 'wait' ? 'bg-amber-500' : 'bg-blue-500';
 
     const children = node.to?.filter(c => !c.prompt).map(c => workflow[c.id]).filter(Boolean) as WorkflowNode[];
     const trueBranch = node.to?.filter(c => c.prompt === 'True').map(c => workflow[c.id]).filter(Boolean) as WorkflowNode[];
@@ -1040,14 +1035,12 @@ export default function App() {
     );
   };
 
-  const AddButton = ({ parentId, branch, pathId, insertBetween, variant = 'append' }: { 
+  const AddButton = ({ parentId, branch, pathId }: { 
     parentId: string | null; 
     branch?: 'true' | 'false' | 'loop'; 
     pathId?: string;
-    insertBetween?: { childId: string };
-    variant?: 'append' | 'insert';
   }) => {
-    const buttonId = `${parentId || 'root'}-${branch || 'main'}-${pathId || 'none'}-${insertBetween?.childId || 'none'}`;
+    const buttonId = `${parentId || 'root'}-${branch || 'main'}-${pathId || 'none'}`;
     const isOpen = activePopoverId === buttonId;
 
     const getPrompt = () => {
@@ -1059,7 +1052,7 @@ export default function App() {
 
     return (
       <div className={`flex flex-col items-center relative ${isOpen ? 'z-[60]' : 'z-20'}`}>
-        {variant === 'append' && <div className="h-16 connection-line-v" />}
+        <div className="h-16 connection-line-v" />
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -1085,7 +1078,7 @@ export default function App() {
               >
                 <button 
                   onClick={() => {
-                    setModalContext({ parentId, prompt: getPrompt(), pathId, pendingType: 'action', insertBetween });
+                    setModalContext({ parentId, prompt: getPrompt(), pathId, pendingType: 'action' });
                     setIsModalOpen(true);
                     setActivePopoverId(null);
                   }}
@@ -1098,7 +1091,7 @@ export default function App() {
                 </button>
                 <button 
                   onClick={() => {
-                    addNode('condition', undefined, { parentId, prompt: getPrompt(), pathId, insertBetween });
+                    addNode('condition', undefined, { parentId, prompt: getPrompt(), pathId });
                     setActivePopoverId(null);
                   }}
                   className="w-full px-4 py-2.5 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-3 transition-colors"
@@ -1110,7 +1103,7 @@ export default function App() {
                 </button>
                 <button 
                   onClick={() => {
-                    addNode('agent', undefined, { parentId, prompt: getPrompt(), pathId, insertBetween });
+                    addNode('agent', undefined, { parentId, prompt: getPrompt(), pathId });
                     setActivePopoverId(null);
                   }}
                   className="w-full px-4 py-2.5 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-3 transition-colors"
@@ -1122,7 +1115,19 @@ export default function App() {
                 </button>
                 <button 
                   onClick={() => {
-                    addNode('foreach', undefined, { parentId, prompt: getPrompt(), pathId, insertBetween });
+                    addNode('wait', undefined, { parentId, prompt: getPrompt(), pathId });
+                    setActivePopoverId(null);
+                  }}
+                  className="w-full px-4 py-2.5 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-3 transition-colors"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-900/30 text-amber-500 dark:text-amber-400 flex items-center justify-center">
+                    <Clock size={16} />
+                  </div>
+                  <span className="font-medium">Wait</span>
+                </button>
+                <button 
+                  onClick={() => {
+                    addNode('foreach', undefined, { parentId, prompt: getPrompt(), pathId });
                     setActivePopoverId(null);
                   }}
                   className="w-full px-4 py-2.5 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-3 transition-colors"
@@ -1130,9 +1135,8 @@ export default function App() {
                   <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-900/30 text-amber-500 dark:text-amber-400 flex items-center justify-center">
                     <Repeat size={16} />
                   </div>
-                  <span className="font-medium">Foreach loop</span>
+                  <span className="font-medium">For Each</span>
                 </button>
-
               </motion.div>
             </>
           )}
@@ -1154,7 +1158,7 @@ export default function App() {
           >
             <div className="flex flex-col">
               <span className="text-xs font-bold uppercase tracking-widest opacity-80">Connecting Mode</span>
-              <span className="text-sm font-medium">Select an Action, AI Agent, or Condition to connect to</span>
+              <span className="text-sm font-medium">Select an Action, AI Agent, Wait, or Condition to connect to</span>
             </div>
             <button 
               onClick={() => setConnectingFrom(null)}
@@ -1440,6 +1444,11 @@ export default function App() {
                       }}
                     />
                   </div>
+                </section>
+              )}
+
+              {(selectedNode.type === 'agent' || selectedNode.type === 'trigger') && (
+                <section className="space-y-6">
                   <div>
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">EXIT CONDITIONS / PATHS</label>
                     <div className="space-y-3">
@@ -1494,6 +1503,24 @@ export default function App() {
                   >
                     <Plus size={14} /> Add path
                   </button>
+                </section>
+              )}
+
+              {selectedNode.type === 'wait' && (
+                <section>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">Wait Duration (seconds)</label>
+                  <input 
+                    type="number" 
+                    value={selectedNode.duration || 60}
+                    onChange={(e) => {
+                      const updatedWorkflow = { ...workflow };
+                      if (updatedWorkflow[selectedNode.id]) {
+                        updatedWorkflow[selectedNode.id].duration = parseInt(e.target.value) || 0;
+                        setWorkflow(updatedWorkflow);
+                      }
+                    }}
+                    className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm font-medium dark:text-slate-200"
+                  />
                 </section>
               )}
 

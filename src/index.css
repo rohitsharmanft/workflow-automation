@@ -35,7 +35,7 @@ body {
 }
 
 .connection-line-v {
-  width: 0;
+  width: 2px;
   border-left: 2px dashed #024bf7;
 }
 

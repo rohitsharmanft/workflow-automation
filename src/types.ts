@@ -1,4 +1,4 @@
-export type NodeType = 'trigger' | 'action' | 'agent' | 'condition' | 'foreach' | 'note';
+export type NodeType = 'trigger' | 'action' | 'agent' | 'wait' | 'condition' | 'foreach' | 'note';
 
 export interface Connection {
   id: string;
@@ -18,6 +18,7 @@ export interface WorkflowNode {
   markdown?: string;
   customPosition?: { refId: string; x: number; y: number };
   size?: { width: number; height: number };
+  duration?: number;
 }
 
 export type Workflow = Record<string, WorkflowNode>;

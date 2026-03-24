@@ -107,6 +107,7 @@ export const NODE_ICONS: Record<string, any> = {
   trigger: Zap,
   action: Play,
   agent: Cpu,
+  wait: Clock,
   condition: GitBranch,
   foreach: Repeat,
 };

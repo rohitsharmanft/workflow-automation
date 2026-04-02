@@ -34,7 +34,8 @@ import {
   Sun,
   Search,
   Clock,
-  AlertCircle
+  AlertCircle,
+  Split
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { WorkflowNode, Workflow, NodeType, TriggerType, ActionType } from './types';
@@ -463,6 +464,8 @@ export default function App() {
         baseLabel = 'CONDITION';
       } else if (type === 'foreach') {
         baseLabel = 'FOREACH';
+      } else if (type === 'switch') {
+        baseLabel = 'SWITCH';
       } else {
         baseLabel = type.toUpperCase();
       }
@@ -566,13 +569,18 @@ export default function App() {
 
     if (type === 'action') {
       newNode.actionKey = subType;
-    } else if (type === 'agent' || type === 'trigger') {
+    } else if (type === 'agent' || type === 'trigger' || type === 'switch') {
       if (type === 'agent') {
         newNode.prompt = "You're a helpful AI agent...";
         newNode.skills = {};
         newNode.paths = [
           { id: uuidv4(), label: 'Path 1' },
           { id: uuidv4(), label: 'Path 2' }
+        ];
+      } else if (type === 'switch') {
+        newNode.paths = [
+          { id: uuidv4(), label: 'Case 1' },
+          { id: uuidv4(), label: 'Default' }
         ];
       } else {
         newNode.paths = [
@@ -655,10 +663,14 @@ export default function App() {
     const trueBranch = node.to?.filter(c => c.prompt === 'True').map(c => workflow[c.id]).filter(Boolean) as WorkflowNode[];
     const falseBranch = node.to?.filter(c => c.prompt === 'False').map(c => workflow[c.id]).filter(Boolean) as WorkflowNode[];
     const loopBody = node.to?.filter(c => c.prompt === 'loop').map(c => workflow[c.id]).filter(Boolean) as WorkflowNode[];
-    const agentPaths = node.paths?.map(p => ({
+    const switchPaths = (node.type === 'switch') ? node.paths?.map(p => ({
       ...p,
       node: p.nodeId ? workflow[p.nodeId] : undefined
-    })) || [];
+    })) || [] : [];
+    const agentPaths = (node.type === 'agent' || node.type === 'trigger') ? node.paths?.map(p => ({
+      ...p,
+      node: p.nodeId ? workflow[p.nodeId] : undefined
+    })) || [] : [];
 
     const isAnyChildPopoverOpen = activePopoverId?.includes(node.id);
 
@@ -687,7 +699,7 @@ export default function App() {
         {hideLabel && <div className="h-10 connection-line-v" />}
 
         {/* Node Card */}
-        {node.type !== 'foreach' && node.type !== 'condition' ? (
+        {node.type !== 'foreach' && node.type !== 'condition' && node.type !== 'switch' ? (
           <motion.div
             layoutId={node.id}
             onClick={(e) => {
@@ -857,7 +869,7 @@ export default function App() {
               </div>
             </div>
           </motion.div>
-        ) : (
+        ) : node.type === 'condition' ? (
           <div className="flex flex-col items-center relative">
             {/* Condition Header Card */}
             <motion.div
@@ -941,6 +953,156 @@ export default function App() {
               </div>
             </div>
           </div>
+        ) : (
+          <div className="flex flex-col items-center relative group/switch-node">
+            {/* Switch Header Card */}
+            <motion.div
+              layoutId={node.id}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (connectingFrom) {
+                  if (node.type !== 'trigger') {
+                    handleConnectToNode(node.id);
+                  }
+                  return;
+                }
+                setSelectedNodeId(node.id);
+              }}
+              className={`
+                relative z-30 flex items-center justify-between w-80 h-24 px-6 bg-white dark:bg-slate-900 rounded-[2rem] border-2 transition-all cursor-pointer shadow-2xl
+                ${isSelected ? 'border-indigo-500 ring-4 ring-indigo-500/10' : 'border-slate-100 dark:border-slate-800'}
+                ${connectingFrom ? 'ring-4 ring-blue-500/50 border-blue-500 animate-pulse' : ''}
+              `}
+            >
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-2xl shadow-sm">
+                  <Split size={24} />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-500 mb-1">Switch</span>
+                  <span className="text-base font-bold text-slate-800 dark:text-slate-100 truncate max-w-[180px]">{node.label}</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                 <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteNode(node.id);
+                  }}
+                  className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 rounded-xl transition-colors"
+                >
+                  <Trash2 size={18} />
+                </button>
+              </div>
+            </motion.div>
+
+            {/* Main Container */}
+            <div className="relative -mt-12 pt-28 pb-12 px-8 border border-slate-200 dark:border-slate-800 rounded-[4rem] bg-white dark:bg-slate-900/30 flex gap-12 w-fit min-w-[36rem] z-10 backdrop-blur-sm">
+              
+              {/* Dynamic SVG Lines */}
+              <svg className="absolute top-0 left-0 w-full h-28 pointer-events-none overflow-visible">
+                {switchPaths.map((_, idx) => {
+                  const xPos = ((idx + 0.5) / switchPaths.length) * 100;
+                  return (
+                    <path 
+                      key={idx}
+                      d={`M 50% 48 L 50% 80 L ${xPos}% 80 L ${xPos}% 112`} 
+                      fill="none" 
+                      stroke={isDarkMode ? '#3b82f6' : '#024bf7'} 
+                      strokeWidth="2" 
+                      strokeDasharray="4 4"
+                      strokeLinecap="round"
+                    />
+                  );
+                })}
+              </svg>
+
+              {/* Switch Cases */}
+              {switchPaths.map((path, idx) => (
+                <div key={path.id} className={`flex-1 flex flex-col items-center relative transition-all ${activePopoverId?.includes(path.id) ? 'z-[60]' : 'z-20 hover:z-40'}`}>
+                  <div className="group/case relative flex flex-col items-center w-full">
+                    <div className={`px-10 py-3 rounded-full text-[12px] font-black uppercase tracking-[0.2em] flex items-center gap-2 shadow-lg mb-4 transform -translate-y-2 transition-all ${path.label === 'Default' ? 'bg-slate-500 text-white shadow-slate-500/20' : 'bg-indigo-500 text-white shadow-indigo-500/20'}`}>
+                      {path.label}
+                      {path.label !== 'Default' && (
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (!workflow) return;
+                            const updatedWorkflow = { ...workflow };
+                            const n = updatedWorkflow[node.id];
+                            if (n.paths) {
+                              n.paths = n.paths.filter(p => p.id !== path.id);
+                            }
+                            setWorkflow(updatedWorkflow);
+                          }}
+                          className="ml-2 opacity-0 group-hover/case:opacity-100 p-1 hover:bg-white/20 rounded-full transition-all"
+                        >
+                          <X size={10} />
+                        </button>
+                      )}
+                    </div>
+                    
+                    <div className="w-full border-2 border-dashed border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 rounded-[3rem] p-6 shadow-inner min-h-[200px] flex flex-col items-center">
+                       {path.node ? renderNode(path.node, { isFirst: true, hideLabel: true, parentId: node.id, pathId: path.id }) : (
+                         <AddButton parentId={node.id} pathId={path.id} />
+                       )}
+                    </div>
+
+                    {/* Add Case Button between cases */}
+                    {idx < switchPaths.length - 1 && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!workflow) return;
+                          const updatedWorkflow = { ...workflow };
+                          const n = updatedWorkflow[node.id];
+                          if (n.paths) {
+                            const newCaseId = uuidv4();
+                            const caseCount = n.paths.filter(p => p.label.startsWith('Case')).length;
+                            const newPath = { id: newCaseId, label: `Case ${caseCount + 1}` };
+                            n.paths.splice(idx + 1, 0, newPath);
+                          }
+                          setWorkflow(updatedWorkflow);
+                        }}
+                        className="absolute top-1/2 -right-6 translate-x-1/2 z-30 w-8 h-8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-full flex items-center justify-center text-blue-500 hover:scale-110 transition-all shadow-md opacity-0 group-hover/switch-node:opacity-100"
+                        title="Add Case"
+                      >
+                        <Plus size={16} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+            
+            {/* Add Case Button at the bottom of the container */}
+            <div className="mt-4 opacity-0 group-hover/switch-node:opacity-100 transition-opacity">
+               <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!workflow) return;
+                  const updatedWorkflow = { ...workflow };
+                  const n = updatedWorkflow[node.id];
+                  if (n.paths) {
+                    const newCaseId = uuidv4();
+                    const caseCount = n.paths.filter(p => p.label.startsWith('Case')).length;
+                    const newPath = { id: newCaseId, label: `Case ${caseCount + 1}` };
+                    const defaultIdx = n.paths.findIndex(p => p.label === 'Default');
+                    if (defaultIdx !== -1) {
+                      n.paths.splice(defaultIdx, 0, newPath);
+                    } else {
+                      n.paths.push(newPath);
+                    }
+                  }
+                  setWorkflow(updatedWorkflow);
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 text-[10px] font-black uppercase tracking-widest rounded-full border border-indigo-100 dark:border-indigo-900/50 hover:bg-indigo-100 transition-colors"
+              >
+                <Plus size={12} />
+                Add Case
+              </button>
+            </div>
+          </div>
         )}
 
         {/* Agent/Trigger Paths */}
@@ -970,12 +1132,10 @@ export default function App() {
             </div>
           </div>
         )}
-
-        {/* Sequential Children */}
-        {node.type !== 'agent' && node.type !== 'trigger' && node.type !== 'condition' && node.type !== 'foreach' && children.map((child, idx) => renderNode(child, { isFirst: false, parentId: node.id }))}
+        {node.type !== 'agent' && node.type !== 'trigger' && node.type !== 'condition' && node.type !== 'foreach' && node.type !== 'switch' && children.map((child, idx) => renderNode(child, { isFirst: false, parentId: node.id }))}
         
         {/* Add Button for next sequential node - only if this is the end of the chain */}
-        {node.type !== 'agent' && node.type !== 'trigger' && node.type !== 'condition' && node.type !== 'foreach' && children.length === 0 && (
+        {node.type !== 'agent' && node.type !== 'trigger' && node.type !== 'condition' && node.type !== 'foreach' && node.type !== 'switch' && children.length === 0 && (
           <AddButton parentId={node.id} />
         )}
       </div>
@@ -986,6 +1146,7 @@ export default function App() {
     if (!workflow) return null;
     const colorClass = node.type === 'trigger' ? 'bg-indigo-500' : 
                       node.type === 'condition' ? 'bg-slate-700' :
+                      node.type === 'switch' ? 'bg-indigo-600' :
                       node.type === 'foreach' ? 'bg-[#4a76a8]' :
                       node.type === 'agent' ? 'bg-pink-500' :
                       node.type === 'wait' ? 'bg-amber-500' : 'bg-blue-500';
@@ -994,7 +1155,8 @@ export default function App() {
     const trueBranch = node.to?.filter(c => c.prompt === 'True').map(c => workflow[c.id]).filter(Boolean) as WorkflowNode[];
     const falseBranch = node.to?.filter(c => c.prompt === 'False').map(c => workflow[c.id]).filter(Boolean) as WorkflowNode[];
     const loopBody = node.to?.filter(c => c.prompt === 'loop').map(c => workflow[c.id]).filter(Boolean) as WorkflowNode[];
-    const agentPaths = node.paths?.map(p => p.nodeId ? workflow[p.nodeId] : null).filter(Boolean) as WorkflowNode[];
+    const switchPaths = (node.type === 'switch') ? node.paths?.map(p => p.nodeId ? workflow[p.nodeId] : null).filter(Boolean) as WorkflowNode[] : [];
+    const agentPaths = (node.type === 'agent' || node.type === 'trigger') ? node.paths?.map(p => p.nodeId ? workflow[p.nodeId] : null).filter(Boolean) as WorkflowNode[] : [];
 
     return (
       <div className="flex flex-col items-center">
@@ -1019,7 +1181,18 @@ export default function App() {
           </div>
         )}
 
-        {node.type === 'agent' && (
+        {node.type === 'switch' && (
+          <div className="flex gap-12 mb-4">
+            {switchPaths.map(child => (
+              <div key={child.id} className="flex flex-col items-center">
+                <div className="w-24 h-6 bg-slate-300 rounded-md mb-2" />
+                <MinimapNode node={child} />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {(node.type === 'agent' || node.type === 'trigger') && (
           <div className="flex gap-12 mb-4">
             {agentPaths.map(child => (
               <div key={child.id} className="flex flex-col items-center">
@@ -1136,6 +1309,18 @@ export default function App() {
                     <Repeat size={16} />
                   </div>
                   <span className="font-medium">For Each</span>
+                </button>
+                <button 
+                  onClick={() => {
+                    addNode('switch', undefined, { parentId, prompt: getPrompt(), pathId });
+                    setActivePopoverId(null);
+                  }}
+                  className="w-full px-4 py-2.5 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-3 transition-colors"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-500 dark:text-indigo-400 flex items-center justify-center">
+                    <Split size={16} />
+                  </div>
+                  <span className="font-medium">Switch</span>
                 </button>
               </motion.div>
             </>

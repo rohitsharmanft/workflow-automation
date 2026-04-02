@@ -1,4 +1,4 @@
-export type NodeType = 'trigger' | 'action' | 'agent' | 'wait' | 'condition' | 'foreach' | 'note';
+export type NodeType = 'trigger' | 'action' | 'agent' | 'wait' | 'condition' | 'foreach' | 'note' | 'switch';
 
 export interface Connection {
   id: string;

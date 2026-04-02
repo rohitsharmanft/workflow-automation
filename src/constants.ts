@@ -1,4 +1,4 @@
-import { Zap, Play, Cpu, GitBranch, Repeat, Mail, MessageSquare, Database, Globe, Infinity, Terminal, Search, Clock, MessageCircle, Users, Bell } from 'lucide-react';
+import { Zap, Play, Cpu, GitBranch, Repeat, Mail, MessageSquare, Database, Globe, Infinity, Terminal, Search, Clock, MessageCircle, Users, Bell, Split } from 'lucide-react';
 
 export const TRIGGER_TYPES = [
   { 
@@ -110,5 +110,6 @@ export const NODE_ICONS: Record<string, any> = {
   wait: Clock,
   condition: GitBranch,
   foreach: Repeat,
+  switch: Split,
 };
  

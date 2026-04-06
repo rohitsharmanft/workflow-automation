@@ -19,6 +19,8 @@ export interface WorkflowNode {
   customPosition?: { refId: string; x: number; y: number };
   size?: { width: number; height: number };
   duration?: number;
+  parameters?: Record<string, any>;
+  code_view?: string;
 }
 
 export type Workflow = Record<string, WorkflowNode>;

@@ -35,15 +35,155 @@ import {
   Search,
   Clock,
   AlertCircle,
-  Split
+  Split,
+  Terminal,
+  Variable
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { WorkflowNode, Workflow, NodeType, TriggerType, ActionType } from './types';
 import { TRIGGER_TYPES, ACTION_TYPES, AI_AGENT_TYPES, NODE_ICONS } from './constants';
 
+// JSONTagEditor component for handling variables with @ trigger
+const JSONTagEditor = ({ value, onChange, workflow, placeholder }: any) => {
+  const [showPicker, setShowPicker] = useState(false);
+  const [search, setSearch] = useState('');
+  const [cursorIndex, setCursorIndex] = useState(0);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const availableVariables = useMemo(() => {
+    if (!workflow) return [];
+    const vars: any[] = [];
+    
+    Object.values(workflow).forEach((node: any) => {
+      // Add the node itself as a variable
+      vars.push({
+        id: node.id,
+        label: node.label,
+        type: node.type
+      });
+
+      // Add specific outputs for certain node types
+      if (node.type === 'trigger' || node.type === 'http-trigger') {
+        vars.push({ id: `${node.id}-body`, label: `${node.label}.body`, type: 'variable' });
+        vars.push({ id: `${node.id}-headers`, label: `${node.label}.headers`, type: 'variable' });
+        // Add a shortcut for the main trigger if it's the start node
+        if (node.id === 'start') {
+          vars.push({ id: 'body-shortcut', label: 'body{}', type: 'variable' });
+          vars.push({ id: 'headers-shortcut', label: 'headers{}', type: 'variable' });
+          vars.push({ id: 'body-simple', label: 'body', type: 'variable' });
+          vars.push({ id: 'headers-simple', label: 'headers', type: 'variable' });
+          vars.push({ id: 'query-simple', label: 'query', type: 'variable' });
+        }
+      }
+      if (node.type === 'agent') {
+        vars.push({ id: `${node.id}-output`, label: `${node.label}.output`, type: 'variable' });
+      }
+    });
+    
+    return vars;
+  }, [workflow]);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === '@') {
+      const { selectionStart } = e.currentTarget;
+      setCursorIndex(selectionStart);
+      setShowPicker(true);
+      setSearch('');
+    }
+    
+    if (showPicker) {
+      if (e.key === 'Escape') {
+        setShowPicker(false);
+      }
+      if (e.key === 'Enter' && search) {
+        const filtered = availableVariables.filter(v => v.label.toLowerCase().includes(search.toLowerCase()));
+        if (filtered.length > 0) {
+          handleSelect(filtered[0]);
+          e.preventDefault();
+        }
+      }
+    }
+  };
+
+  const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    onChange(val);
+    
+    if (showPicker) {
+      const textSinceAt = val.substring(cursorIndex + 1, e.target.selectionStart);
+      if (textSinceAt.includes(' ') || textSinceAt.includes('\n')) {
+        setShowPicker(false);
+      } else {
+        setSearch(textSinceAt);
+      }
+    }
+  };
+
+  const handleSelect = (variable: any) => {
+    const before = value.substring(0, cursorIndex);
+    const after = value.substring(textareaRef.current?.selectionStart || cursorIndex + 1);
+    const newValue = `${before}@${variable.label}${after}`;
+    onChange(newValue);
+    setShowPicker(false);
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        const newPos = before.length + variable.label.length + 1;
+        textareaRef.current.setSelectionRange(newPos, newPos);
+      }
+    }, 0);
+  };
+
+  return (
+    <div className="relative group w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl focus-within:ring-2 focus-within:ring-blue-500 transition-all overflow-hidden">
+      <textarea 
+        ref={textareaRef}
+        placeholder={placeholder || '{\n  "key": "value"\n}'}
+        value={value || ''}
+        onKeyDown={handleKeyDown}
+        onChange={handleInput}
+        spellCheck="false"
+        className="w-full h-48 px-4 py-3 bg-transparent border-none outline-none text-sm font-mono leading-relaxed text-slate-900 dark:text-slate-100 caret-blue-500 dark:caret-blue-400 relative z-10 selection:bg-blue-500/30 resize-none"
+      />
+
+      <AnimatePresence>
+        {showPicker && (
+          <motion.div 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
+            className="absolute z-20 left-4 right-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl overflow-hidden max-h-48 overflow-y-auto"
+            style={{ top: '100%', marginTop: '8px' }}
+          >
+            <div className="p-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Select Variable</span>
+            </div>
+            {availableVariables.filter(v => v.label.toLowerCase().includes(search.toLowerCase())).map(v => (
+              <button
+                key={v.id}
+                onClick={() => handleSelect(v)}
+                className="w-full px-4 py-2 text-left text-xs font-medium hover:bg-blue-50 dark:hover:bg-blue-900/20 text-slate-700 dark:text-slate-300 flex items-center gap-2 transition-colors"
+              >
+                <div className="w-5 h-5 rounded bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center text-purple-600 dark:text-purple-400">
+                  <span className="italic text-[10px] font-bold">fx</span>
+                </div>
+                {v.label}
+              </button>
+            ))}
+            {availableVariables.filter(v => v.label.toLowerCase().includes(search.toLowerCase())).length === 0 && (
+              <div className="p-4 text-center text-xs text-slate-400 italic">No variables found</div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
 export default function App() {
   const [workflow, setWorkflow] = useState<Workflow | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState('Parameters');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activePopoverId, setActivePopoverId] = useState<string | null>(null);
   const [modalContext, setModalContext] = useState<{ 
@@ -80,10 +220,26 @@ export default function App() {
       Object.keys(data).forEach(id => {
         const node = data[id];
         const nodeType = node.type === 'ai-agent' ? 'agent' : node.type;
+        
+        const typeInfo = nodeType === 'trigger' 
+          ? TRIGGER_TYPES.find(t => t.id === node.triggerKey)
+          : nodeType === 'action' 
+            ? ACTION_TYPES.find(a => a.id === node.actionKey)
+            : null;
+            
+        const codeView = node.code_view || typeInfo?.code_view;
+        let parameters = node.parameters || {};
+        
+        if (codeView && !parameters.inputs) {
+          parameters = { inputs: parameters };
+        }
+
         migrated[id] = {
           ...node,
           type: nodeType,
-          to: node.to || []
+          to: node.to || [],
+          code_view: codeView,
+          parameters
         };
         
         if ((nodeType === 'agent' || nodeType === 'trigger') && (!node.paths || node.paths.length === 0)) {
@@ -95,9 +251,17 @@ export default function App() {
           const sequentialChild = node.to?.find((c: any) => !c.prompt);
           if (sequentialChild) {
             migrated[id].paths[0].nodeId = sequentialChild.id;
-            // Remove from sequential 'to'
-            migrated[id].to = migrated[id].to.filter((c: any) => c.id !== sequentialChild.id);
           }
+        }
+
+        // Ensure 'to' contains all path nodeId's
+        if (migrated[id].paths) {
+          if (!migrated[id].to) migrated[id].to = [];
+          migrated[id].paths.forEach((p: any) => {
+            if (p.nodeId && !migrated[id].to.some((c: any) => c.id === p.nodeId)) {
+              migrated[id].to.push({ id: p.nodeId });
+            }
+          });
         }
       });
       return migrated;
@@ -107,9 +271,23 @@ export default function App() {
     if (data.id && data.type) {
       const flatMap: Workflow = {};
       const traverse = (node: any) => {
+        const nodeType = node.type === 'ai-agent' ? 'agent' : node.type;
+        const typeInfo = nodeType === 'trigger' 
+          ? TRIGGER_TYPES.find(t => t.id === node.triggerKey)
+          : nodeType === 'action' 
+            ? ACTION_TYPES.find(a => a.id === node.actionKey)
+            : null;
+            
+        const codeView = node.code_view || typeInfo?.code_view;
+        let parameters = node.parameters || {};
+        
+        if (codeView && !parameters.inputs) {
+          parameters = { inputs: parameters };
+        }
+
         const newNode: WorkflowNode = {
           id: node.id,
-          type: node.type === 'ai-agent' ? 'agent' : node.type,
+          type: nodeType,
           label: node.label,
           to: [],
           triggerKey: node.triggerKey,
@@ -118,7 +296,9 @@ export default function App() {
           skills: node.skills,
           markdown: node.markdown,
           customPosition: node.customPosition,
-          size: node.size
+          size: node.size,
+          code_view: codeView,
+          parameters
         };
 
         // Handle children (sequential)
@@ -149,6 +329,13 @@ export default function App() {
               return { id: path.id || uuidv4(), label: path.label, nodeId: path.node.id };
             }
             return { id: path.id || uuidv4(), label: path.label, nodeId: path.nodeId };
+          });
+
+          // Ensure 'to' contains all path nodeId's
+          newNode.paths.forEach((p: any) => {
+            if (p.nodeId && !newNode.to.some((c: any) => c.id === p.nodeId)) {
+              newNode.to.push({ id: p.nodeId });
+            }
           });
         }
 
@@ -254,7 +441,24 @@ export default function App() {
       const parent = updatedWorkflow[parentId!];
       if (pathId && parent.paths) {
         const path = parent.paths.find(p => p.id === pathId);
-        if (path) path.nodeId = targetId;
+        if (path) {
+          const oldNodeId = path.nodeId;
+          path.nodeId = targetId;
+          
+          if (!parent.to) parent.to = [];
+          
+          // Remove old nodeId from 'to' if it's not used by any other path
+          if (oldNodeId && oldNodeId !== targetId) {
+            const isUsedElsewhere = parent.paths.some(p => p.id !== pathId && p.nodeId === oldNodeId);
+            if (!isUsedElsewhere) {
+              parent.to = parent.to.filter(c => c.id !== oldNodeId);
+            }
+          }
+
+          if (!parent.to.some(c => c.id === targetId)) {
+            parent.to.push({ id: targetId });
+          }
+        }
       } else {
         if (!parent.to) parent.to = [];
         if (!parent.to.some(c => c.id === targetId)) {
@@ -441,6 +645,12 @@ export default function App() {
     }
   }, [handleWheel]);
  
+  useEffect(() => {
+    if (selectedNodeId) {
+      setActiveTab('Parameters');
+    }
+  }, [selectedNodeId]);
+
   const selectedNode = useMemo(() => {
     if (!selectedNodeId || !workflow) return null;
     return workflow[selectedNodeId] || null;
@@ -529,6 +739,33 @@ export default function App() {
         
         if (type === 'trigger') updatedWorkflow[changingNodeId].triggerKey = subType;
         if (type === 'action') updatedWorkflow[changingNodeId].actionKey = subType;
+        
+        const typeInfo = type === 'trigger' 
+          ? TRIGGER_TYPES.find(t => t.id === subType)
+          : ACTION_TYPES.find(a => a.id === subType);
+
+        if (typeInfo) {
+          updatedWorkflow[changingNodeId].code_view = typeInfo.code_view;
+        }
+
+        // Initialize parameters
+        if (typeInfo?.parameters) {
+          const params: Record<string, any> = {};
+          typeInfo.parameters.forEach((p: any) => {
+            if (p.type === 'keyvalue') {
+              params[p.id] = [{ key: '', value: '' }];
+            } else {
+              params[p.id] = '';
+            }
+          });
+
+          if (typeInfo.code_view) {
+            updatedWorkflow[changingNodeId].parameters = { inputs: params };
+          } else {
+            updatedWorkflow[changingNodeId].parameters = params;
+          }
+        }
+
         if (type === 'trigger' || type === 'agent') {
           updatedWorkflow[changingNodeId].paths = type === 'trigger'
             ? [{ id: uuidv4(), label: 'Path 1' }]
@@ -550,6 +787,28 @@ export default function App() {
         node.triggerKey = subType;
         node.label = getLabel(type, subType);
         
+        // Initialize parameters
+        const typeInfo = TRIGGER_TYPES.find(t => t.id === subType);
+        if (typeInfo) {
+          node.code_view = typeInfo.code_view;
+        }
+        if (typeInfo?.parameters) {
+          const params: Record<string, any> = {};
+          typeInfo.parameters.forEach((p: any) => {
+            if (p.type === 'keyvalue') {
+              params[p.id] = [{ key: '', value: '' }];
+            } else {
+              params[p.id] = '';
+            }
+          });
+
+          if (typeInfo.code_view) {
+            node.parameters = { inputs: params };
+          } else {
+            node.parameters = params;
+          }
+        }
+
         if (!node.paths || node.paths.length === 0) {
           node.paths = [{ id: uuidv4(), label: 'Path 1' }];
         }
@@ -569,6 +828,26 @@ export default function App() {
 
     if (type === 'action') {
       newNode.actionKey = subType;
+      const typeInfo = ACTION_TYPES.find(a => a.id === subType);
+      if (typeInfo) {
+        newNode.code_view = typeInfo.code_view;
+      }
+      if (typeInfo?.parameters) {
+        const params: Record<string, any> = {};
+        typeInfo.parameters.forEach((p: any) => {
+          if (p.type === 'keyvalue') {
+            params[p.id] = [{ key: '', value: '' }];
+          } else {
+            params[p.id] = '';
+          }
+        });
+
+        if (typeInfo.code_view) {
+          newNode.parameters = { inputs: params };
+        } else {
+          newNode.parameters = params;
+        }
+      }
     } else if (type === 'agent' || type === 'trigger' || type === 'switch') {
       if (type === 'agent') {
         newNode.prompt = "You're a helpful AI agent...";
@@ -586,6 +865,29 @@ export default function App() {
         newNode.paths = [
           { id: uuidv4(), label: 'Path 1' }
         ];
+        if (type === 'trigger') {
+          newNode.triggerKey = subType;
+          const typeInfo = TRIGGER_TYPES.find(t => t.id === subType);
+          if (typeInfo) {
+            newNode.code_view = typeInfo.code_view;
+          }
+          if (typeInfo?.parameters) {
+            const params: Record<string, any> = {};
+            typeInfo.parameters.forEach((p: any) => {
+              if (p.type === 'keyvalue') {
+                params[p.id] = [{ key: '', value: '' }];
+              } else {
+                params[p.id] = '';
+              }
+            });
+
+            if (typeInfo.code_view) {
+              newNode.parameters = { inputs: params };
+            } else {
+              newNode.parameters = params;
+            }
+          }
+        }
       }
     }
 
@@ -602,6 +904,11 @@ export default function App() {
           const path = parent.paths.find(p => p.id === pathId);
           if (path) {
             path.nodeId = nodeId;
+            // Also add to 'to' array for triggers/agents
+            if (!parent.to) parent.to = [];
+            if (!parent.to.some(c => c.id === nodeId)) {
+              parent.to.push({ id: nodeId });
+            }
           }
         } else {
           if (!parent.to) parent.to = [];
@@ -632,7 +939,11 @@ export default function App() {
       }
     });
 
-    setWorkflow(updatedWorkflow);
+    if (id === 'start' || Object.keys(updatedWorkflow).length === 0) {
+      setWorkflow(null);
+    } else {
+      setWorkflow(updatedWorkflow);
+    }
     setSelectedNodeId(null);
   };
 
@@ -654,7 +965,7 @@ export default function App() {
   };
 
   const renderNode = (node: WorkflowNode, options: { isFirst?: boolean; hideLabel?: boolean; parentId?: string | null; prompt?: string; pathId?: string } = {}) => {
-    if (!workflow) return null;
+    if (!workflow || !node) return null;
     const { isFirst = false, hideLabel = false, parentId = null, prompt = undefined, pathId = undefined } = options;
     const Icon = NODE_ICONS[node.type] || Play;
     const isSelected = selectedNodeId === node.id;
@@ -899,7 +1210,16 @@ export default function App() {
                   <span className="text-base font-bold text-slate-800 dark:text-slate-100 truncate max-w-[180px]">{node.label}</span>
                 </div>
               </div>
-              <div className="flex items-center gap-2 text-slate-400">
+              <div className="flex items-center gap-2">
+                 <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteNode(node.id);
+                  }}
+                  className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 rounded-xl transition-colors"
+                >
+                  <Trash2 size={18} />
+                </button>
               </div>
             </motion.div>
 
@@ -1073,34 +1393,34 @@ export default function App() {
                   </div>
                 </div>
               ))}
-            </div>
-            
-            {/* Add Case Button at the bottom of the container */}
-            <div className="mt-4 opacity-0 group-hover/switch-node:opacity-100 transition-opacity">
-               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (!workflow) return;
-                  const updatedWorkflow = { ...workflow };
-                  const n = updatedWorkflow[node.id];
-                  if (n.paths) {
-                    const newCaseId = uuidv4();
-                    const caseCount = n.paths.filter(p => p.label.startsWith('Case')).length;
-                    const newPath = { id: newCaseId, label: `Case ${caseCount + 1}` };
-                    const defaultIdx = n.paths.findIndex(p => p.label === 'Default');
-                    if (defaultIdx !== -1) {
-                      n.paths.splice(defaultIdx, 0, newPath);
-                    } else {
-                      n.paths.push(newPath);
+
+              {/* Add Case Button at the bottom of the container */}
+              <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 z-30 opacity-0 group-hover/switch-node:opacity-100 transition-opacity">
+                 <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!workflow) return;
+                    const updatedWorkflow = { ...workflow };
+                    const n = updatedWorkflow[node.id];
+                    if (n.paths) {
+                      const newCaseId = uuidv4();
+                      const caseCount = n.paths.filter(p => p.label.startsWith('Case')).length;
+                      const newPath = { id: newCaseId, label: `Case ${caseCount + 1}` };
+                      const defaultIdx = n.paths.findIndex(p => p.label === 'Default');
+                      if (defaultIdx !== -1) {
+                        n.paths.splice(defaultIdx, 0, newPath);
+                      } else {
+                        n.paths.push(newPath);
+                      }
                     }
-                  }
-                  setWorkflow(updatedWorkflow);
-                }}
-                className="flex items-center gap-2 px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 text-[10px] font-black uppercase tracking-widest rounded-full border border-indigo-100 dark:border-indigo-900/50 hover:bg-indigo-100 transition-colors"
-              >
-                <Plus size={12} />
-                Add Case
-              </button>
+                    setWorkflow(updatedWorkflow);
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 text-[10px] font-black uppercase tracking-widest rounded-full border border-indigo-100 dark:border-indigo-900/50 hover:bg-indigo-100 transition-colors shadow-lg"
+                >
+                  <Plus size={12} />
+                  Add Case
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -1132,10 +1452,10 @@ export default function App() {
             </div>
           </div>
         )}
-        {node.type !== 'agent' && node.type !== 'trigger' && node.type !== 'condition' && node.type !== 'foreach' && node.type !== 'switch' && children.map((child, idx) => renderNode(child, { isFirst: false, parentId: node.id }))}
+        {node.type !== 'agent' && node.type !== 'trigger' && children.map((child, idx) => renderNode(child, { isFirst: false, parentId: node.id }))}
         
         {/* Add Button for next sequential node - only if this is the end of the chain */}
-        {node.type !== 'agent' && node.type !== 'trigger' && node.type !== 'condition' && node.type !== 'foreach' && node.type !== 'switch' && children.length === 0 && (
+        {node.type !== 'agent' && node.type !== 'trigger' && children.length === 0 && (
           <AddButton parentId={node.id} />
         )}
       </div>
@@ -1383,7 +1703,7 @@ export default function App() {
             transformOrigin: 'center center'
           }}
         >
-          {!workflow ? (
+          {!workflow || !workflow['start'] ? (
             <div className="flex flex-col items-center justify-center text-center pointer-events-auto">
               <div className="w-20 h-20 bg-indigo-100 text-indigo-600 rounded-3xl flex items-center justify-center mb-6 shadow-inner">
                 <Zap size={40} />
@@ -1581,7 +1901,7 @@ export default function App() {
             exit={{ x: 400 }}
             className="w-96 bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-2xl z-10 flex flex-col"
           >
-            <div className="p-6 border-bottom border-slate-100 dark:border-slate-800 flex items-center justify-between">
+            <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg text-slate-600 dark:text-slate-400">
                   {React.createElement(NODE_ICONS[selectedNode.type] || Play, { size: 20 })}
@@ -1595,121 +1915,345 @@ export default function App() {
                 <X size={20} />
               </button>
             </div>
+
+            {/* Tabs */}
+            <div className="flex border-b border-slate-100 dark:border-slate-800 px-6">
+              {['Parameters', 'Code View', 'About'].map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`py-3 px-2 text-[11px] font-bold uppercase tracking-wider transition-all relative ${
+                    activeTab === tab 
+                      ? 'text-blue-600 dark:text-blue-400' 
+                      : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+                  }`}
+                >
+                  {tab}
+                  {activeTab === tab && (
+                    <motion.div 
+                      layoutId="activeTab"
+                      className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400"
+                    />
+                  )}
+                </button>
+              ))}
+            </div>
             
             <div className="flex-1 overflow-auto p-6 space-y-8">
-              <section>
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">Name</label>
-                <input 
-                  type="text" 
-                  value={selectedNode.label}
-                  onChange={(e) => {
-                    const updatedWorkflow = JSON.parse(JSON.stringify(workflow));
-                    const node = updatedWorkflow[selectedNode.id];
-                    if (node) node.label = e.target.value;
-                    setWorkflow(updatedWorkflow);
-                  }}
-                  className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm font-medium dark:text-slate-200"
-                />
-              </section>
-
-              {selectedNode.type === 'agent' && (
-                <section className="space-y-6">
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">AI AGENT PROMPT</label>
-                    <textarea 
-                      className="w-full h-40 px-4 py-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm leading-relaxed dark:text-slate-200"
-                      placeholder="You're a support agent resolving customer queries..."
-                      value={selectedNode.prompt || ''}
+              {activeTab === 'Parameters' && (
+                <div className="space-y-8">
+                  {/* Name always as first position */}
+                  <section>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">Name</label>
+                    <input 
+                      type="text" 
+                      value={selectedNode.label}
                       onChange={(e) => {
-                        const updatedWorkflow = { ...workflow };
-                        if (updatedWorkflow[selectedNode.id]) {
-                          updatedWorkflow[selectedNode.id].prompt = e.target.value;
-                          setWorkflow(updatedWorkflow);
-                        }
+                        const updatedWorkflow = JSON.parse(JSON.stringify(workflow));
+                        const node = updatedWorkflow[selectedNode.id];
+                        if (node) node.label = e.target.value;
+                        setWorkflow(updatedWorkflow);
                       }}
+                      className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm font-medium dark:text-slate-200"
                     />
-                  </div>
-                </section>
-              )}
+                  </section>
 
-              {(selectedNode.type === 'agent' || selectedNode.type === 'trigger') && (
-                <section className="space-y-6">
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">EXIT CONDITIONS / PATHS</label>
-                    <div className="space-y-3">
-                      {selectedNode.paths?.map((path, idx) => (
-                        <div key={path.id} className="flex items-center gap-2">
-                          <input 
-                            type="text"
-                            value={path.label}
-                            onChange={(e) => {
-                              const updatedWorkflow = { ...workflow };
-                              const node = updatedWorkflow[selectedNode.id];
-                              if (node && node.paths) {
-                                const p = node.paths.find(p => p.id === path.id);
-                                if (p) p.label = e.target.value;
-                                setWorkflow(updatedWorkflow);
-                              }
-                            }}
-                            className="flex-1 px-3 py-2 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg text-xs dark:text-slate-200"
-                            placeholder={`Path ${idx + 1}`}
-                          />
-                          <button 
-                            onClick={() => {
-                              const updatedWorkflow = { ...workflow };
-                              const node = updatedWorkflow[selectedNode.id];
-                              if (node && node.paths) {
-                                node.paths = node.paths.filter(p => p.id !== path.id);
-                                setWorkflow(updatedWorkflow);
-                              }
-                            }}
-                            className="p-2 text-slate-400 hover:text-red-500"
-                          >
-                            <Trash2 size={14} />
-                          </button>
+                  {/* AI Agent Prompt (if applicable) */}
+                  {selectedNode.type === 'agent' && (
+                    <section className="space-y-6">
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">AI AGENT PROMPT</label>
+                        <textarea 
+                          className="w-full h-40 px-4 py-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm leading-relaxed dark:text-slate-200"
+                          placeholder="You're a support agent resolving customer queries..."
+                          value={selectedNode.prompt || ''}
+                          onChange={(e) => {
+                            const updatedWorkflow = { ...workflow };
+                            if (updatedWorkflow[selectedNode.id]) {
+                              updatedWorkflow[selectedNode.id].prompt = e.target.value;
+                              setWorkflow(updatedWorkflow);
+                            }
+                          }}
+                        />
+                      </div>
+                    </section>
+                  )}
+
+                  {/* Wait Duration (if applicable) */}
+                  {selectedNode.type === 'wait' && (
+                    <section>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">Wait Duration (seconds)</label>
+                      <input 
+                        type="number" 
+                        value={selectedNode.duration || 60}
+                        onChange={(e) => {
+                          const updatedWorkflow = { ...workflow };
+                          if (updatedWorkflow[selectedNode.id]) {
+                            updatedWorkflow[selectedNode.id].duration = parseInt(e.target.value) || 0;
+                            setWorkflow(updatedWorkflow);
+                          }
+                        }}
+                        className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm font-medium dark:text-slate-200"
+                      />
+                    </section>
+                  )}
+
+                  {/* Dynamic Parameters for Triggers and Actions */}
+                  {(selectedNode.type === 'trigger' || selectedNode.type === 'action') && (() => {
+                    const typeInfo = selectedNode.type === 'trigger' 
+                      ? TRIGGER_TYPES.find(t => t.id === selectedNode.triggerKey)
+                      : ACTION_TYPES.find(a => a.id === selectedNode.actionKey);
+                    
+                    if (!typeInfo?.parameters) return null;
+
+                    return (
+                      <section className="space-y-6">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Parameters</label>
                         </div>
-                      ))}
+                        
+                        <div className="space-y-6">
+                          {typeInfo.parameters.map((param: any) => {
+                            const value = selectedNode.parameters?.inputs 
+                              ? selectedNode.parameters.inputs[param.id]
+                              : selectedNode.parameters?.[param.id];
+                            
+                            const updateParam = (val: any) => {
+                              const updatedWorkflow = { ...workflow };
+                              const node = updatedWorkflow[selectedNode.id];
+                              if (node) {
+                                if (!node.parameters) node.parameters = {};
+                                if (node.code_view) {
+                                  if (!node.parameters.inputs) node.parameters.inputs = {};
+                                  node.parameters.inputs[param.id] = val;
+                                } else {
+                                  node.parameters[param.id] = val;
+                                }
+                                setWorkflow(updatedWorkflow);
+                              }
+                            };
+
+                            return (
+                              <div key={param.id} className="space-y-2">
+                                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                                  {param.label}
+                                  {param.required && <span className="text-red-500">*</span>}
+                                </label>
+
+                                {param.type === 'text' && (
+                                  <input 
+                                    type="text"
+                                    placeholder={param.placeholder}
+                                    value={value || ''}
+                                    onChange={(e) => updateParam(e.target.value)}
+                                    className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm font-medium dark:text-slate-200"
+                                  />
+                                )}
+
+                                {param.type === 'textarea' && (
+                                  <textarea 
+                                    placeholder={param.placeholder}
+                                    value={value || ''}
+                                    onChange={(e) => updateParam(e.target.value)}
+                                    className="w-full h-32 px-4 py-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm leading-relaxed dark:text-slate-200"
+                                  />
+                                )}
+
+                                {param.type === 'select' && (
+                                  <div className="relative">
+                                    <select 
+                                      value={value || ''}
+                                      onChange={(e) => updateParam(e.target.value)}
+                                      className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm font-medium dark:text-slate-200 appearance-none pr-10"
+                                    >
+                                      <option value="" disabled>Select {param.label}</option>
+                                      {param.options.map((opt: any) => (
+                                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                      ))}
+                                    </select>
+                                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                                      <ChevronUp className="rotate-180" size={16} />
+                                    </div>
+                                  </div>
+                                )}
+
+                                {param.type === 'keyvalue' && (
+                                  <div className="space-y-3">
+                                    {(value || [{ key: '', value: '' }]).map((kv: any, idx: number) => (
+                                      <div key={idx} className="flex items-center gap-2">
+                                        <input 
+                                          type="text"
+                                          placeholder="Enter key"
+                                          value={kv.key}
+                                          onChange={(e) => {
+                                            const newList = [...(value || [{ key: '', value: '' }])];
+                                            newList[idx] = { ...newList[idx], key: e.target.value };
+                                            updateParam(newList);
+                                          }}
+                                          className="flex-1 px-3 py-2 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg text-xs dark:text-slate-200"
+                                        />
+                                        <input 
+                                          type="text"
+                                          placeholder="Enter value"
+                                          value={kv.value}
+                                          onChange={(e) => {
+                                            const newList = [...(value || [{ key: '', value: '' }])];
+                                            newList[idx] = { ...newList[idx], value: e.target.value };
+                                            updateParam(newList);
+                                          }}
+                                          className="flex-1 px-3 py-2 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg text-xs dark:text-slate-200"
+                                        />
+                                        <button 
+                                          onClick={() => {
+                                            const newList = (value || [{ key: '', value: '' }]).filter((_: any, i: number) => i !== idx);
+                                            updateParam(newList.length ? newList : [{ key: '', value: '' }]);
+                                          }}
+                                          className="p-2 text-slate-400 hover:text-red-500"
+                                        >
+                                          <Trash2 size={14} />
+                                        </button>
+                                      </div>
+                                    ))}
+                                    <button 
+                                      onClick={() => updateParam([...(value || [{ key: '', value: '' }]), { key: '', value: '' }])}
+                                      className="text-[10px] font-bold text-blue-500 hover:text-blue-600 flex items-center gap-1"
+                                    >
+                                      <Plus size={10} /> Add field
+                                    </button>
+                                  </div>
+                                )}
+
+                                {param.type === 'json' && (
+                                  <JSONTagEditor 
+                                    value={value}
+                                    onChange={updateParam}
+                                    workflow={workflow}
+                                    placeholder={param.placeholder}
+                                  />
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </section>
+                    );
+                  })()}
+
+                  {/* Exit Conditions / Paths (always last position) */}
+                  {(selectedNode.type === 'agent' || selectedNode.type === 'trigger' || selectedNode.type === 'switch') && (
+                    <section className="space-y-6">
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">
+                          {selectedNode.type === 'switch' ? 'CASES' : 'EXIT CONDITIONS / PATHS'}
+                        </label>
+                        <div className="space-y-3">
+                          {selectedNode.paths?.map((path, idx) => (
+                            <div key={path.id} className="flex items-center gap-2">
+                              <input 
+                                type="text"
+                                value={path.label}
+                                onChange={(e) => {
+                                  const updatedWorkflow = { ...workflow };
+                                  const node = updatedWorkflow[selectedNode.id];
+                                  if (node && node.paths) {
+                                    const p = node.paths.find(p => p.id === path.id);
+                                    if (p) p.label = e.target.value;
+                                    setWorkflow(updatedWorkflow);
+                                  }
+                                }}
+                                className="flex-1 px-3 py-2 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg text-xs dark:text-slate-200"
+                                placeholder={selectedNode.type === 'switch' ? `Case ${idx + 1}` : `Path ${idx + 1}`}
+                              />
+                              <button 
+                                onClick={() => {
+                                  const updatedWorkflow = { ...workflow };
+                                  const node = updatedWorkflow[selectedNode.id];
+                                  if (node && node.paths) {
+                                    node.paths = node.paths.filter(p => p.id !== path.id);
+                                    setWorkflow(updatedWorkflow);
+                                  }
+                                }}
+                                className="p-2 text-slate-400 hover:text-red-500"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => {
+                          const updatedWorkflow = { ...workflow };
+                          const node = updatedWorkflow[selectedNode.id];
+                          if (node) {
+                            if (!node.paths) node.paths = [];
+                            node.paths.push({ 
+                              id: uuidv4(), 
+                              label: selectedNode.type === 'switch' ? `Case ${node.paths.length + 1}` : `Path ${node.paths.length + 1}` 
+                            });
+                            setWorkflow(updatedWorkflow);
+                          }
+                        }}
+                        className="w-full py-4 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-400 hover:border-blue-500 hover:text-blue-500 transition-all flex items-center justify-center gap-2"
+                      >
+                        <Plus size={14} /> {selectedNode.type === 'switch' ? 'Add case' : 'Add path'}
+                      </button>
+                    </section>
+                  )}
+                </div>
+              )}
+
+              {activeTab === 'Code View' && (() => {
+                const typeInfo = selectedNode.type === 'trigger' 
+                  ? TRIGGER_TYPES.find(t => t.id === selectedNode.triggerKey)
+                  : ACTION_TYPES.find(a => a.id === selectedNode.actionKey);
+                
+                const code = typeInfo?.code_view || selectedNode.code_view;
+
+                if (code) {
+                  return (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Code Representation</label>
+                        <button 
+                          onClick={() => navigator.clipboard.writeText(code)}
+                          className="text-[10px] font-bold text-blue-500 hover:text-blue-600 flex items-center gap-1"
+                        >
+                          Copy Code
+                        </button>
+                      </div>
+                      <div className="p-6 bg-slate-900 rounded-2xl border border-slate-800 shadow-inner overflow-x-auto">
+                        <pre className="text-sm font-mono text-blue-400 leading-relaxed whitespace-pre-wrap">
+                          <code>{code}</code>
+                        </pre>
+                      </div>
+                      <p className="text-[10px] text-slate-400 italic">
+                        This is a read-only preview of the underlying code for this {selectedNode.type}.
+                      </p>
                     </div>
+                  );
+                }
+
+                return (
+                  <div className="flex flex-col items-center justify-center py-24 text-center">
+                    <div className="w-16 h-16 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center mb-6 text-slate-300">
+                      <Terminal size={32} />
+                    </div>
+                    <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 mb-2">Code View</h3>
+                    <p className="text-xs text-slate-400 max-w-[200px]">No code representation available for this node type.</p>
                   </div>
-                  <button 
-                    onClick={() => {
-                      const updatedWorkflow = { ...workflow };
-                      const node = updatedWorkflow[selectedNode.id];
-                      if (node) {
-                        if (!node.paths) node.paths = [];
-                        node.paths.push({ 
-                          id: uuidv4(), 
-                          label: `Path ${node.paths.length + 1}` 
-                        });
-                        setWorkflow(updatedWorkflow);
-                      }
-                    }}
-                    className="w-full py-4 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-400 hover:border-blue-500 hover:text-blue-500 transition-all flex items-center justify-center gap-2"
-                  >
-                    <Plus size={14} /> Add path
-                  </button>
-                </section>
-              )}
+                );
+              })()}
 
-              {selectedNode.type === 'wait' && (
-                <section>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">Wait Duration (seconds)</label>
-                  <input 
-                    type="number" 
-                    value={selectedNode.duration || 60}
-                    onChange={(e) => {
-                      const updatedWorkflow = { ...workflow };
-                      if (updatedWorkflow[selectedNode.id]) {
-                        updatedWorkflow[selectedNode.id].duration = parseInt(e.target.value) || 0;
-                        setWorkflow(updatedWorkflow);
-                      }
-                    }}
-                    className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm font-medium dark:text-slate-200"
-                  />
-                </section>
+              {activeTab === 'About' && (
+                <div className="flex flex-col items-center justify-center py-24 text-center">
+                  <div className="w-16 h-16 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center mb-6 text-slate-300">
+                    <AlertCircle size={32} />
+                  </div>
+                  <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 mb-2">{activeTab}</h3>
+                  <p className="text-xs text-slate-400 max-w-[200px]">This feature is currently under development.</p>
+                </div>
               )}
-
-             
             </div>
           </motion.div>
         )}

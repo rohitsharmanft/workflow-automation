@@ -246,22 +246,6 @@ export default function App() {
           migrated[id].paths = nodeType === 'trigger' 
             ? [{ id: uuidv4(), label: 'Path 1' }]
             : [{ id: uuidv4(), label: 'Path 1' }, { id: uuidv4(), label: 'Path 2' }];
-          
-          // If it had sequential children, move the first one to Path 1
-          const sequentialChild = node.to?.find((c: any) => !c.prompt);
-          if (sequentialChild) {
-            migrated[id].paths[0].nodeId = sequentialChild.id;
-          }
-        }
-
-        // Ensure 'to' contains all path nodeId's
-        if (migrated[id].paths) {
-          if (!migrated[id].to) migrated[id].to = [];
-          migrated[id].paths.forEach((p: any) => {
-            if (p.nodeId && !migrated[id].to.some((c: any) => c.id === p.nodeId)) {
-              migrated[id].to.push({ id: p.nodeId });
-            }
-          });
         }
       });
       return migrated;
@@ -329,13 +313,6 @@ export default function App() {
               return { id: path.id || uuidv4(), label: path.label, nodeId: path.node.id };
             }
             return { id: path.id || uuidv4(), label: path.label, nodeId: path.nodeId };
-          });
-
-          // Ensure 'to' contains all path nodeId's
-          newNode.paths.forEach((p: any) => {
-            if (p.nodeId && !newNode.to.some((c: any) => c.id === p.nodeId)) {
-              newNode.to.push({ id: p.nodeId });
-            }
           });
         }
 
@@ -442,22 +419,7 @@ export default function App() {
       if (pathId && parent.paths) {
         const path = parent.paths.find(p => p.id === pathId);
         if (path) {
-          const oldNodeId = path.nodeId;
           path.nodeId = targetId;
-          
-          if (!parent.to) parent.to = [];
-          
-          // Remove old nodeId from 'to' if it's not used by any other path
-          if (oldNodeId && oldNodeId !== targetId) {
-            const isUsedElsewhere = parent.paths.some(p => p.id !== pathId && p.nodeId === oldNodeId);
-            if (!isUsedElsewhere) {
-              parent.to = parent.to.filter(c => c.id !== oldNodeId);
-            }
-          }
-
-          if (!parent.to.some(c => c.id === targetId)) {
-            parent.to.push({ id: targetId });
-          }
         }
       } else {
         if (!parent.to) parent.to = [];
@@ -904,11 +866,6 @@ export default function App() {
           const path = parent.paths.find(p => p.id === pathId);
           if (path) {
             path.nodeId = nodeId;
-            // Also add to 'to' array for triggers/agents
-            if (!parent.to) parent.to = [];
-            if (!parent.to.some(c => c.id === nodeId)) {
-              parent.to.push({ id: nodeId });
-            }
           }
         } else {
           if (!parent.to) parent.to = [];
@@ -967,6 +924,7 @@ export default function App() {
   const renderNode = (node: WorkflowNode, options: { isFirst?: boolean; hideLabel?: boolean; parentId?: string | null; prompt?: string; pathId?: string } = {}) => {
     if (!workflow || !node) return null;
     const { isFirst = false, hideLabel = false, parentId = null, prompt = undefined, pathId = undefined } = options;
+    
     const Icon = NODE_ICONS[node.type] || Play;
     const isSelected = selectedNodeId === node.id;
 
@@ -1024,7 +982,7 @@ export default function App() {
               setSelectedNodeId(node.id);
             }}
             className={`
-              relative group flex items-center gap-5 p-4 rounded-[2rem] border-2 transition-all cursor-pointer w-80 bg-white dark:bg-slate-900 shadow-xl
+              relative group flex items-center gap-5 p-4 rounded-[10px] border-2 transition-all cursor-pointer w-80 bg-white dark:bg-slate-900 shadow-xl
               ${node.type === 'agent' ? 'ai-agent-gradient' : ''}
               ${isSelected 
                 ? 'border-indigo-500 ring-4 ring-indigo-500/10' 
@@ -1032,7 +990,7 @@ export default function App() {
               ${connectingFrom && node.type !== 'trigger' ? 'ring-4 ring-blue-500/50 border-blue-500 animate-pulse' : ''}
             `}
           >
-            <div className={`p-3.5 rounded-2xl shadow-sm ${
+            <div className={`p-3.5 rounded-[10px] shadow-sm ${
               isSelected 
                 ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' 
                 : node.type === 'trigger' 
@@ -1128,13 +1086,13 @@ export default function App() {
               setSelectedNodeId(node.id);
             }}
             className={`
-              relative group flex flex-col w-fit min-w-[32rem] rounded-[2.5rem] border-2 transition-all cursor-pointer bg-white dark:bg-slate-900 shadow-2xl
+              relative group flex flex-col w-fit min-w-[32rem] rounded-[10px] border-2 transition-all cursor-pointer bg-white dark:bg-slate-900 shadow-2xl
               ${isSelected ? 'border-amber-500 ring-4 ring-amber-500/10' : 'border-slate-100 dark:border-slate-800'}
               ${connectingFrom ? 'ring-4 ring-blue-500/50 border-blue-500 animate-pulse' : ''}
             `}
           >
             {/* Header Bar */}
-            <div className="bg-amber-500 text-white px-8 py-5 flex items-center justify-between rounded-t-[2.4rem]">
+            <div className="bg-amber-500 text-white px-8 py-5 flex items-center justify-between rounded-t-[10px]">
               <div className="flex items-center gap-4">
                 <div className="p-2.5 bg-white/20 rounded-xl backdrop-blur-sm shadow-sm">
                   <Repeat size={22} />
@@ -1168,7 +1126,7 @@ export default function App() {
                 Loop Start
               </div>
               
-              <div className={`w-fit min-w-full border-2 border-dashed border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 rounded-[3rem] p-8 shadow-inner min-h-[200px] flex flex-col items-center relative transition-all ${activePopoverId?.includes(`${node.id}-loop`) ? 'z-[60]' : 'hover:z-40'}`}>
+              <div className={`w-fit min-w-full border-2 border-dashed border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 rounded-[10px] p-8 shadow-inner min-h-[200px] flex flex-col items-center relative transition-all ${activePopoverId?.includes(`${node.id}-loop`) ? 'z-[60]' : 'hover:z-40'}`}>
                 {loopBody.map((child, idx) => renderNode(child, { isFirst: idx === 0, hideLabel: idx === 0, parentId: node.id, prompt: 'loop' }))}
                 {(!loopBody || loopBody.length === 0) && (
                   <AddButton parentId={node.id} branch="loop" />
@@ -1196,7 +1154,7 @@ export default function App() {
                 setSelectedNodeId(node.id);
               }}
               className={`
-                relative z-30 flex items-center justify-between w-80 h-24 px-6 bg-white dark:bg-slate-900 rounded-[2rem] border-2 transition-all cursor-pointer shadow-2xl
+                relative z-30 flex items-center justify-between w-80 h-24 px-6 bg-white dark:bg-slate-900 rounded-[10px] border-2 transition-all cursor-pointer shadow-2xl
                 ${isSelected ? 'border-indigo-500 ring-4 ring-indigo-500/10' : 'border-slate-100 dark:border-slate-800'}
                 ${connectingFrom ? 'ring-4 ring-blue-500/50 border-blue-500 animate-pulse' : ''}
               `}
@@ -1224,7 +1182,7 @@ export default function App() {
             </motion.div>
 
             {/* Main Container */}
-            <div className="relative -mt-12 pt-28 pb-12 px-8 border border-slate-200 dark:border-slate-800 rounded-[4rem] bg-white dark:bg-slate-900/30 flex gap-12 w-fit min-w-[36rem] z-10 backdrop-blur-sm">
+            <div className="relative -mt-12 pt-28 pb-12 px-8 border border-slate-200 dark:border-slate-800 rounded-[10px] bg-white dark:bg-slate-900/30 flex gap-12 w-fit min-w-[36rem] z-10 backdrop-blur-sm">
               
               {/* Orthogonal SVG Lines */}
               <svg className="absolute top-0 left-0 w-full h-28 pointer-events-none overflow-visible">
@@ -1251,7 +1209,7 @@ export default function App() {
                 <div className="bg-emerald-500 text-white px-10 py-3 rounded-full text-[12px] font-black uppercase tracking-[0.2em] flex items-center gap-2 shadow-lg shadow-emerald-500/20 mb-4 transform -translate-y-2">
                   True <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
                 </div>
-                <div className="w-full border-2 border-dashed border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 rounded-[3rem] p-6 shadow-inner min-h-[200px] flex flex-col items-center">
+                <div className="w-full border-2 border-dashed border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 rounded-[10px] p-6 shadow-inner min-h-[200px] flex flex-col items-center">
                    {trueBranch.map((child, idx) => renderNode(child, { isFirst: idx === 0, hideLabel: idx === 0, parentId: node.id, prompt: 'True' }))}
                    {(!trueBranch || trueBranch.length === 0) && (
                      <AddButton parentId={node.id} branch="true" />
@@ -1264,7 +1222,7 @@ export default function App() {
                 <div className="bg-rose-500 text-white px-10 py-3 rounded-full text-[12px] font-black uppercase tracking-[0.2em] flex items-center gap-2 shadow-lg shadow-rose-500/20 mb-4 transform -translate-y-2">
                   False <div className="w-1.5 h-1.5 bg-white rounded-full opacity-60" />
                 </div>
-                <div className="w-full border-2 border-dashed border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 rounded-[3rem] p-6 shadow-inner min-h-[200px] flex flex-col items-center">
+                <div className="w-full border-2 border-dashed border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 rounded-[10px] p-6 shadow-inner min-h-[200px] flex flex-col items-center">
                    {falseBranch.map((child, idx) => renderNode(child, { isFirst: idx === 0, hideLabel: idx === 0, parentId: node.id, prompt: 'False' }))}
                    {(!falseBranch || falseBranch.length === 0) && (
                      <AddButton parentId={node.id} branch="false" />
@@ -1289,7 +1247,7 @@ export default function App() {
                 setSelectedNodeId(node.id);
               }}
               className={`
-                relative z-30 flex items-center justify-between w-80 h-24 px-6 bg-white dark:bg-slate-900 rounded-[2rem] border-2 transition-all cursor-pointer shadow-2xl
+                relative z-30 flex items-center justify-between w-80 h-24 px-6 bg-white dark:bg-slate-900 rounded-[10px] border-2 transition-all cursor-pointer shadow-2xl
                 ${isSelected ? 'border-indigo-500 ring-4 ring-indigo-500/10' : 'border-slate-100 dark:border-slate-800'}
                 ${connectingFrom ? 'ring-4 ring-blue-500/50 border-blue-500 animate-pulse' : ''}
               `}
@@ -1317,7 +1275,7 @@ export default function App() {
             </motion.div>
 
             {/* Main Container */}
-            <div className="relative -mt-12 pt-28 pb-12 px-8 border border-slate-200 dark:border-slate-800 rounded-[4rem] bg-white dark:bg-slate-900/30 flex gap-12 w-fit min-w-[36rem] z-10 backdrop-blur-sm">
+            <div className="relative -mt-12 pt-28 pb-12 px-8 border border-slate-200 dark:border-slate-800 rounded-[10px] bg-white dark:bg-slate-900/30 flex gap-12 w-fit min-w-[36rem] z-10 backdrop-blur-sm">
               
               {/* Dynamic SVG Lines */}
               <svg className="absolute top-0 left-0 w-full h-28 pointer-events-none overflow-visible">
@@ -1362,7 +1320,7 @@ export default function App() {
                       )}
                     </div>
                     
-                    <div className="w-full border-2 border-dashed border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 rounded-[3rem] p-6 shadow-inner min-h-[200px] flex flex-col items-center">
+                    <div className="w-full border-2 border-dashed border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 rounded-[10px] p-6 shadow-inner min-h-[200px] flex flex-col items-center">
                        {path.node ? renderNode(path.node, { isFirst: true, hideLabel: true, parentId: node.id, pathId: path.id }) : (
                          <AddButton parentId={node.id} pathId={path.id} />
                        )}
@@ -1429,7 +1387,7 @@ export default function App() {
         {(node.type === 'agent' || node.type === 'trigger') && (
           <div className="flex flex-col items-center">
             <div className="h-10 connection-line-v" />
-            <div className="flex justify-center relative">
+            <div className="flex justify-center relative group/paths">
               {agentPaths.map((path, idx) => (
                 <div key={path.id} className={`flex flex-col items-center relative transition-all min-w-[20rem] px-8 ${activePopoverId?.includes(path.id) ? 'z-[60]' : 'z-10 hover:z-40'}`}>
                   {/* Horizontal Line Segments to connect paths */}
@@ -1480,23 +1438,23 @@ export default function App() {
 
     return (
       <div className="flex flex-col items-center">
-        <div className={`w-40 h-16 rounded-lg ${colorClass} shadow-sm mb-4`} />
+        <div className={`w-40 h-16 rounded-[10px] ${colorClass} shadow-sm mb-4`} />
         
         {node.type === 'condition' && (
           <div className="flex gap-20 mb-4">
             <div className="flex flex-col items-center">
-              <div className="w-32 h-8 bg-green-500 rounded-md mb-2" />
+              <div className="w-32 h-8 bg-green-500 rounded-[10px] mb-2" />
               {trueBranch.map(child => <MinimapNode key={child.id} node={child} />)}
             </div>
             <div className="flex flex-col items-center">
-              <div className="w-32 h-8 bg-red-500 rounded-md mb-2" />
+              <div className="w-32 h-8 bg-red-500 rounded-[10px] mb-2" />
               {falseBranch.map(child => <MinimapNode key={child.id} node={child} />)}
             </div>
           </div>
         )}
 
         {node.type === 'foreach' && (
-          <div className="p-4 border-2 border-dashed border-slate-300 rounded-xl mb-4 flex flex-col items-center">
+          <div className="p-4 border-2 border-dashed border-slate-300 rounded-[10px] mb-4 flex flex-col items-center">
             {loopBody.map(child => <MinimapNode key={child.id} node={child} />)}
           </div>
         )}
@@ -1505,7 +1463,7 @@ export default function App() {
           <div className="flex gap-12 mb-4">
             {switchPaths.map(child => (
               <div key={child.id} className="flex flex-col items-center">
-                <div className="w-24 h-6 bg-slate-300 rounded-md mb-2" />
+                <div className="w-24 h-6 bg-slate-300 rounded-[10px] mb-2" />
                 <MinimapNode node={child} />
               </div>
             ))}
@@ -1516,7 +1474,7 @@ export default function App() {
           <div className="flex gap-12 mb-4">
             {agentPaths.map(child => (
               <div key={child.id} className="flex flex-col items-center">
-                <div className="w-24 h-6 bg-slate-300 rounded-md mb-2" />
+                <div className="w-24 h-6 bg-slate-300 rounded-[10px] mb-2" />
                 <MinimapNode node={child} />
               </div>
             ))}
@@ -1567,7 +1525,7 @@ export default function App() {
                 initial={{ opacity: 0, y: 10, scale: 0.95 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                className="absolute top-full mt-2 left-1/2 -translate-x-1/2 w-56 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-100 dark:border-slate-800 py-2 z-[100] overflow-hidden"
+                className="absolute top-full mt-2 left-1/2 -translate-x-1/2 w-56 bg-white dark:bg-slate-900 rounded-[10px] shadow-xl border border-slate-100 dark:border-slate-800 py-2 z-[100] overflow-hidden"
               >
                 <button 
                   onClick={() => {
@@ -1577,7 +1535,7 @@ export default function App() {
                   }}
                   className="w-full px-4 py-2.5 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-3 transition-colors"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-500 dark:text-blue-400 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-[10px] bg-blue-50 dark:bg-blue-900/30 text-blue-500 dark:text-blue-400 flex items-center justify-center">
                     <Play size={16} />
                   </div>
                   <span className="font-medium">Perform an action</span>
@@ -1589,7 +1547,7 @@ export default function App() {
                   }}
                   className="w-full px-4 py-2.5 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-3 transition-colors"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-500 dark:text-indigo-400 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-[10px] bg-indigo-50 dark:bg-indigo-900/30 text-indigo-500 dark:text-indigo-400 flex items-center justify-center">
                     <GitBranch size={16} />
                   </div>
                   <span className="font-medium">Condition</span>
@@ -1601,7 +1559,7 @@ export default function App() {
                   }}
                   className="w-full px-4 py-2.5 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-3 transition-colors"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-pink-50 dark:bg-pink-900/30 text-pink-500 dark:text-pink-400 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-[10px] bg-pink-50 dark:bg-pink-900/30 text-pink-500 dark:text-pink-400 flex items-center justify-center">
                     <Cpu size={16} />
                   </div>
                   <span className="font-medium">Enter AI agent</span>
@@ -1613,7 +1571,7 @@ export default function App() {
                   }}
                   className="w-full px-4 py-2.5 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-3 transition-colors"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-900/30 text-amber-500 dark:text-amber-400 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-[10px] bg-amber-50 dark:bg-amber-900/30 text-amber-500 dark:text-amber-400 flex items-center justify-center">
                     <Clock size={16} />
                   </div>
                   <span className="font-medium">Wait</span>
@@ -1625,7 +1583,7 @@ export default function App() {
                   }}
                   className="w-full px-4 py-2.5 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-3 transition-colors"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-900/30 text-amber-500 dark:text-amber-400 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-[10px] bg-amber-50 dark:bg-amber-900/30 text-amber-500 dark:text-amber-400 flex items-center justify-center">
                     <Repeat size={16} />
                   </div>
                   <span className="font-medium">For Each</span>
@@ -1637,7 +1595,7 @@ export default function App() {
                   }}
                   className="w-full px-4 py-2.5 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-3 transition-colors"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-500 dark:text-indigo-400 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-[10px] bg-indigo-50 dark:bg-indigo-900/30 text-indigo-500 dark:text-indigo-400 flex items-center justify-center">
                     <Split size={16} />
                   </div>
                   <span className="font-medium">Switch</span>
@@ -1652,29 +1610,6 @@ export default function App() {
 
   return (
     <div className={`flex h-screen overflow-hidden font-sans relative transition-colors duration-300 ${isDarkMode ? 'dark bg-slate-950' : 'bg-slate-50'}`}>
-      {/* Connecting Mode Banner */}
-      <AnimatePresence>
-        {connectingFrom && (
-          <motion.div
-            initial={{ y: -100 }}
-            animate={{ y: 0 }}
-            exit={{ y: -100 }}
-            className="absolute top-8 left-1/2 -translate-x-1/2 z-[100] bg-blue-600 text-white px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-4"
-          >
-            <div className="flex flex-col">
-              <span className="text-xs font-bold uppercase tracking-widest opacity-80">Connecting Mode</span>
-              <span className="text-sm font-medium">Select an Action, AI Agent, Wait, or Condition to connect to</span>
-            </div>
-            <button 
-              onClick={() => setConnectingFrom(null)}
-              className="p-2 hover:bg-white/10 rounded-xl transition-colors"
-            >
-              <X size={20} />
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* Main Canvas Area */}
       <div 
         ref={containerRef}
@@ -1705,7 +1640,7 @@ export default function App() {
         >
           {!workflow || !workflow['start'] ? (
             <div className="flex flex-col items-center justify-center text-center pointer-events-auto">
-              <div className="w-20 h-20 bg-indigo-100 text-indigo-600 rounded-3xl flex items-center justify-center mb-6 shadow-inner">
+              <div className="w-20 h-20 bg-indigo-100 text-indigo-600 rounded-[10px] flex items-center justify-center mb-6 shadow-inner">
                 <Zap size={40} />
               </div>
               <h1 className="text-3xl font-bold text-slate-800 mb-2">Build your workflow</h1>

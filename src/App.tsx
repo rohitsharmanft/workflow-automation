@@ -982,35 +982,34 @@ export default function App() {
               setSelectedNodeId(node.id);
             }}
             className={`
-              relative group flex items-center gap-5 p-4 rounded-[10px] border-2 transition-all cursor-pointer w-80 bg-white dark:bg-slate-900 shadow-xl
+              relative group flex items-center gap-4 p-4 rounded-[10px] border transition-all cursor-pointer w-80 bg-white dark:bg-slate-900 shadow-sm hover:shadow-md
               ${node.type === 'agent' ? 'ai-agent-gradient' : ''}
               ${isSelected 
-                ? 'border-indigo-500 ring-4 ring-indigo-500/10' 
-                : 'border-slate-100 dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700'}
-              ${connectingFrom && node.type !== 'trigger' ? 'ring-4 ring-blue-500/50 border-blue-500 animate-pulse' : ''}
+                ? 'border-indigo-500 ring-2 ring-indigo-500/20' 
+                : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'}
             `}
           >
-            <div className={`p-3.5 rounded-[10px] shadow-sm ${
+            <div className={`p-2.5 rounded-[8px] ${
               isSelected 
                 ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' 
                 : node.type === 'trigger' 
-                  ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400'
+                  ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'
                   : node.type === 'agent'
                     ? 'bg-fuchsia-50 dark:bg-fuchsia-900/30 text-fuchsia-600 dark:text-fuchsia-400'
                     : node.type === 'wait'
                       ? 'bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400'
                       : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
             }`}>
-              <Icon size={24} />
+              <Icon size={20} />
             </div>
             <div className="flex-1 min-w-0">
-              <p className={`text-[10px] font-black uppercase tracking-[0.2em] mb-1 ${
-                node.type === 'trigger' ? 'text-teal-500' : 
-                node.type === 'agent' ? 'text-fuchsia-500' : 
-                node.type === 'wait' ? 'text-amber-500' : 
-                'text-slate-400'
-              }`}>{node.type === 'agent' ? 'AI-AGENT' : node.type}</p>
-              <p className="text-base font-bold text-slate-800 dark:text-slate-100 truncate">{node.label}</p>
+              <p className={`text-[10px] font-bold uppercase tracking-wider mb-0.5 ${
+                node.type === 'trigger' ? 'text-emerald-600 dark:text-emerald-400' : 
+                node.type === 'agent' ? 'text-fuchsia-600 dark:text-fuchsia-400' : 
+                node.type === 'wait' ? 'text-amber-600 dark:text-amber-400' : 
+                'text-slate-500 dark:text-slate-400'
+              }`}>{node.type === 'agent' ? 'AI Agent' : node.type}</p>
+              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">{node.label}</p>
             </div>
             <div className="flex flex-col items-end gap-2">
               <div className="relative">
@@ -1086,20 +1085,19 @@ export default function App() {
               setSelectedNodeId(node.id);
             }}
             className={`
-              relative group flex flex-col w-fit min-w-[32rem] rounded-[10px] border-2 transition-all cursor-pointer bg-white dark:bg-slate-900 shadow-2xl
-              ${isSelected ? 'border-amber-500 ring-4 ring-amber-500/10' : 'border-slate-100 dark:border-slate-800'}
-              ${connectingFrom ? 'ring-4 ring-blue-500/50 border-blue-500 animate-pulse' : ''}
+              relative group flex flex-col w-fit min-w-[32rem] rounded-[10px] border transition-all cursor-pointer bg-white dark:bg-slate-900 shadow-sm hover:shadow-md
+              ${isSelected ? 'border-amber-500 ring-2 ring-amber-500/20' : 'border-slate-200 dark:border-slate-800'}
             `}
           >
             {/* Header Bar */}
-            <div className="bg-amber-500 text-white px-8 py-5 flex items-center justify-between rounded-t-[10px]">
-              <div className="flex items-center gap-4">
-                <div className="p-2.5 bg-white/20 rounded-xl backdrop-blur-sm shadow-sm">
-                  <Repeat size={22} />
+            <div className="bg-amber-500 text-white px-6 py-4 flex items-center justify-between rounded-t-[9px]">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+                  <Repeat size={18} />
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80">Loop</span>
-                  <span className="text-base font-bold">For each item</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wider opacity-90">Loop</span>
+                  <span className="text-sm font-semibold">For each item</span>
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -1118,7 +1116,7 @@ export default function App() {
             </div>
             
             {/* Loop Body Container */}
-            <div className="p-10 pt-8 bg-slate-50/30 dark:bg-slate-900/30 flex flex-col items-center relative backdrop-blur-sm">
+            <div className="p-10 pt-8 bg-white dark:bg-slate-900 flex flex-col items-center relative backdrop-blur-sm">
               <div className="absolute top-0 left-1/2 -translate-x-1/2 w-px h-8 bg-gradient-to-b from-amber-500/50 to-transparent" />
               
               <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 text-[10px] font-black uppercase tracking-widest rounded-full mb-8 border border-amber-100 dark:border-amber-900/50">
@@ -1154,18 +1152,17 @@ export default function App() {
                 setSelectedNodeId(node.id);
               }}
               className={`
-                relative z-30 flex items-center justify-between w-80 h-24 px-6 bg-white dark:bg-slate-900 rounded-[10px] border-2 transition-all cursor-pointer shadow-2xl
-                ${isSelected ? 'border-indigo-500 ring-4 ring-indigo-500/10' : 'border-slate-100 dark:border-slate-800'}
-                ${connectingFrom ? 'ring-4 ring-blue-500/50 border-blue-500 animate-pulse' : ''}
+                relative z-30 flex items-center justify-between w-80 h-20 px-5 bg-white dark:bg-slate-900 rounded-[10px] border transition-all cursor-pointer shadow-sm hover:shadow-md
+                ${isSelected ? 'border-indigo-500 ring-2 ring-indigo-500/20' : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'}
               `}
             >
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-2xl shadow-sm">
-                  <GitBranch size={24} />
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg border border-indigo-100 dark:border-indigo-800/50">
+                  <GitBranch size={20} />
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-500 mb-1">Condition</span>
-                  <span className="text-base font-bold text-slate-800 dark:text-slate-100 truncate max-w-[180px]">{node.label}</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-500 mb-0.5">Condition</span>
+                  <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate max-w-[180px]">{node.label}</span>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -1174,42 +1171,43 @@ export default function App() {
                     e.stopPropagation();
                     deleteNode(node.id);
                   }}
-                  className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 rounded-xl transition-colors"
+                  className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-500 rounded-lg transition-colors"
                 >
-                  <Trash2 size={18} />
+                  <Trash2 size={16} />
                 </button>
               </div>
             </motion.div>
 
             {/* Main Container */}
-            <div className="relative -mt-12 pt-28 pb-12 px-8 border border-slate-200 dark:border-slate-800 rounded-[10px] bg-white dark:bg-slate-900/30 flex gap-12 w-fit min-w-[36rem] z-10 backdrop-blur-sm">
+            <div className="relative -mt-10 pt-24 pb-10 px-8 border border-slate-200 dark:border-slate-800 rounded-[10px] bg-white dark:bg-slate-900 flex gap-12 w-fit min-w-[36rem] z-10 backdrop-blur-sm">
               
               {/* Orthogonal SVG Lines */}
-              <svg className="absolute top-0 left-0 w-full h-28 pointer-events-none overflow-visible">
+              <svg className="absolute top-0 left-0 w-full h-24 pointer-events-none overflow-visible">
                 <path 
-                  d={`M 50% 48 L 50% 80 L 25% 80 L 25% 112`} 
+                  d={`M 50% 40 L 50% 60 L 25% 60 L 25% 96`} 
                   fill="none" 
-                  stroke={isDarkMode ? '#3b82f6' : '#024bf7'} 
+                  stroke={isDarkMode ? '#334155' : '#cbd5e1'} 
                   strokeWidth="2" 
-                  strokeDasharray="4 4"
                   strokeLinecap="round"
+                  className="connection-line"
                 />
                 <path 
-                  d={`M 50% 48 L 50% 80 L 75% 80 L 75% 112`} 
+                  d={`M 50% 40 L 50% 60 L 75% 60 L 75% 96`} 
                   fill="none" 
-                  stroke={isDarkMode ? '#3b82f6' : '#024bf7'} 
+                  stroke={isDarkMode ? '#334155' : '#cbd5e1'} 
                   strokeWidth="2" 
-                  strokeDasharray="4 4"
                   strokeLinecap="round"
+                  className="connection-line"
                 />
               </svg>
 
               {/* True Branch */}
               <div className={`flex-1 flex flex-col items-center relative transition-all ${activePopoverId?.includes(`${node.id}-true`) ? 'z-[60]' : 'z-20 hover:z-40'}`}>
-                <div className="bg-emerald-500 text-white px-10 py-3 rounded-full text-[12px] font-black uppercase tracking-[0.2em] flex items-center gap-2 shadow-lg shadow-emerald-500/20 mb-4 transform -translate-y-2">
-                  True <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
+                <div className="bg-emerald-500 text-white px-6 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-emerald-500/20 mb-6 transform -translate-y-1">
+                  <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
+                  True
                 </div>
-                <div className="w-full border-2 border-dashed border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 rounded-[10px] p-6 shadow-inner min-h-[200px] flex flex-col items-center">
+                <div className="w-full border border-dashed border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-[10px] p-6 shadow-inner min-h-[200px] flex flex-col items-center">
                    {trueBranch.map((child, idx) => renderNode(child, { isFirst: idx === 0, hideLabel: idx === 0, parentId: node.id, prompt: 'True' }))}
                    {(!trueBranch || trueBranch.length === 0) && (
                      <AddButton parentId={node.id} branch="true" />
@@ -1219,10 +1217,11 @@ export default function App() {
 
               {/* False Branch */}
               <div className={`flex-1 flex flex-col items-center relative transition-all ${activePopoverId?.includes(`${node.id}-false`) ? 'z-[60]' : 'z-20 hover:z-40'}`}>
-                <div className="bg-rose-500 text-white px-10 py-3 rounded-full text-[12px] font-black uppercase tracking-[0.2em] flex items-center gap-2 shadow-lg shadow-rose-500/20 mb-4 transform -translate-y-2">
-                  False <div className="w-1.5 h-1.5 bg-white rounded-full opacity-60" />
+                <div className="bg-rose-500 text-white px-6 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-rose-500/20 mb-6 transform -translate-y-1">
+                  <div className="w-1.5 h-1.5 bg-white rounded-full opacity-60" />
+                  False
                 </div>
-                <div className="w-full border-2 border-dashed border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 rounded-[10px] p-6 shadow-inner min-h-[200px] flex flex-col items-center">
+                <div className="w-full border border-dashed border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-[10px] p-6 shadow-inner min-h-[200px] flex flex-col items-center">
                    {falseBranch.map((child, idx) => renderNode(child, { isFirst: idx === 0, hideLabel: idx === 0, parentId: node.id, prompt: 'False' }))}
                    {(!falseBranch || falseBranch.length === 0) && (
                      <AddButton parentId={node.id} branch="false" />
@@ -1247,18 +1246,17 @@ export default function App() {
                 setSelectedNodeId(node.id);
               }}
               className={`
-                relative z-30 flex items-center justify-between w-80 h-24 px-6 bg-white dark:bg-slate-900 rounded-[10px] border-2 transition-all cursor-pointer shadow-2xl
-                ${isSelected ? 'border-indigo-500 ring-4 ring-indigo-500/10' : 'border-slate-100 dark:border-slate-800'}
-                ${connectingFrom ? 'ring-4 ring-blue-500/50 border-blue-500 animate-pulse' : ''}
+                relative z-30 flex items-center justify-between w-80 h-20 px-5 bg-white dark:bg-slate-900 rounded-[10px] border transition-all cursor-pointer shadow-sm hover:shadow-md
+                ${isSelected ? 'border-indigo-500 ring-2 ring-indigo-500/20' : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'}
               `}
             >
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-2xl shadow-sm">
-                  <Split size={24} />
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg border border-indigo-100 dark:border-indigo-800/50">
+                  <Split size={20} />
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-500 mb-1">Switch</span>
-                  <span className="text-base font-bold text-slate-800 dark:text-slate-100 truncate max-w-[180px]">{node.label}</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-500 mb-0.5">Switch</span>
+                  <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate max-w-[180px]">{node.label}</span>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -1267,29 +1265,29 @@ export default function App() {
                     e.stopPropagation();
                     deleteNode(node.id);
                   }}
-                  className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 rounded-xl transition-colors"
+                  className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-500 rounded-lg transition-colors"
                 >
-                  <Trash2 size={18} />
+                  <Trash2 size={16} />
                 </button>
               </div>
             </motion.div>
 
             {/* Main Container */}
-            <div className="relative -mt-12 pt-28 pb-12 px-8 border border-slate-200 dark:border-slate-800 rounded-[10px] bg-white dark:bg-slate-900/30 flex gap-12 w-fit min-w-[36rem] z-10 backdrop-blur-sm">
+            <div className="relative -mt-10 pt-24 pb-10 px-8 border border-slate-200 dark:border-slate-800 rounded-[10px] bg-white dark:bg-slate-900 flex gap-12 w-fit min-w-[36rem] z-10 backdrop-blur-sm">
               
               {/* Dynamic SVG Lines */}
-              <svg className="absolute top-0 left-0 w-full h-28 pointer-events-none overflow-visible">
+              <svg className="absolute top-0 left-0 w-full h-24 pointer-events-none overflow-visible">
                 {switchPaths.map((_, idx) => {
                   const xPos = ((idx + 0.5) / switchPaths.length) * 100;
                   return (
                     <path 
                       key={idx}
-                      d={`M 50% 48 L 50% 80 L ${xPos}% 80 L ${xPos}% 112`} 
+                      d={`M 50% 40 L 50% 60 L ${xPos}% 60 L ${xPos}% 96`} 
                       fill="none" 
-                      stroke={isDarkMode ? '#3b82f6' : '#024bf7'} 
+                      stroke={isDarkMode ? '#334155' : '#cbd5e1'} 
                       strokeWidth="2" 
-                      strokeDasharray="4 4"
                       strokeLinecap="round"
+                      className="connection-line"
                     />
                   );
                 })}
@@ -1299,7 +1297,7 @@ export default function App() {
               {switchPaths.map((path, idx) => (
                 <div key={path.id} className={`flex-1 flex flex-col items-center relative transition-all ${activePopoverId?.includes(path.id) ? 'z-[60]' : 'z-20 hover:z-40'}`}>
                   <div className="group/case relative flex flex-col items-center w-full">
-                    <div className={`px-10 py-3 rounded-full text-[12px] font-black uppercase tracking-[0.2em] flex items-center gap-2 shadow-lg mb-4 transform -translate-y-2 transition-all ${path.label === 'Default' ? 'bg-slate-500 text-white shadow-slate-500/20' : 'bg-indigo-500 text-white shadow-indigo-500/20'}`}>
+                    <div className={`px-6 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 shadow-lg mb-6 transform -translate-y-1 transition-all ${path.label === 'Default' ? 'bg-slate-500 text-white shadow-slate-500/20' : 'bg-indigo-500 text-white shadow-indigo-500/20'}`}>
                       {path.label}
                       {path.label !== 'Default' && (
                         <button 
@@ -1320,7 +1318,7 @@ export default function App() {
                       )}
                     </div>
                     
-                    <div className="w-full border-2 border-dashed border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 rounded-[10px] p-6 shadow-inner min-h-[200px] flex flex-col items-center">
+                    <div className="w-full border border-dashed border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-[10px] p-6 shadow-inner min-h-[200px] flex flex-col items-center">
                        {path.node ? renderNode(path.node, { isFirst: true, hideLabel: true, parentId: node.id, pathId: path.id }) : (
                          <AddButton parentId={node.id} pathId={path.id} />
                        )}
@@ -1342,10 +1340,10 @@ export default function App() {
                           }
                           setWorkflow(updatedWorkflow);
                         }}
-                        className="absolute top-1/2 -right-6 translate-x-1/2 z-30 w-8 h-8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-full flex items-center justify-center text-blue-500 hover:scale-110 transition-all shadow-md opacity-0 group-hover/switch-node:opacity-100"
+                        className="absolute top-1/2 -right-6 translate-x-1/2 z-30 w-8 h-8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-full flex items-center justify-center text-indigo-500 hover:scale-110 transition-all shadow-md opacity-0 group-hover/switch-node:opacity-100"
                         title="Add Case"
                       >
-                        <Plus size={16} />
+                        <Plus size={14} />
                       </button>
                     )}
                   </div>
@@ -1354,7 +1352,7 @@ export default function App() {
 
               {/* Add Case Button at the bottom of the container */}
               <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 z-30 opacity-0 group-hover/switch-node:opacity-100 transition-opacity">
-                 <button
+                  <button
                   onClick={(e) => {
                     e.stopPropagation();
                     if (!workflow) return;
@@ -1373,7 +1371,7 @@ export default function App() {
                     }
                     setWorkflow(updatedWorkflow);
                   }}
-                  className="flex items-center gap-2 px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 text-[10px] font-black uppercase tracking-widest rounded-full border border-indigo-100 dark:border-indigo-900/50 hover:bg-indigo-100 transition-colors shadow-lg"
+                  className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold uppercase tracking-widest rounded-full border border-slate-200 dark:border-slate-800 hover:border-indigo-500 transition-all shadow-lg"
                 >
                   <Plus size={12} />
                   Add Case
@@ -1393,8 +1391,8 @@ export default function App() {
                   {/* Horizontal Line Segments to connect paths */}
                   {agentPaths.length > 1 && (
                     <div className="absolute top-0 left-0 right-0 flex">
-                      <div className={`flex-1 border-t-2 border-dashed border-[#024bf7] dark:border-[#3b82f6] ${idx === 0 ? 'opacity-0' : ''}`} />
-                      <div className={`flex-1 border-t-2 border-dashed border-[#024bf7] dark:border-[#3b82f6] ${idx === agentPaths.length - 1 ? 'opacity-0' : ''}`} />
+                      <div className={`flex-1 border-t-2 border-slate-200 dark:border-slate-800 ${idx === 0 ? 'opacity-0' : ''}`} />
+                      <div className={`flex-1 border-t-2 border-slate-200 dark:border-slate-800 ${idx === agentPaths.length - 1 ? 'opacity-0' : ''}`} />
                     </div>
                   )}
                   
@@ -1422,12 +1420,12 @@ export default function App() {
 
   const MinimapNode = ({ node }: { node: WorkflowNode }) => {
     if (!workflow) return null;
-    const colorClass = node.type === 'trigger' ? 'bg-indigo-500' : 
-                      node.type === 'condition' ? 'bg-slate-700' :
-                      node.type === 'switch' ? 'bg-indigo-600' :
-                      node.type === 'foreach' ? 'bg-[#4a76a8]' :
-                      node.type === 'agent' ? 'bg-pink-500' :
-                      node.type === 'wait' ? 'bg-amber-500' : 'bg-blue-500';
+    const colorClass = node.type === 'trigger' ? 'bg-emerald-500' : 
+                      node.type === 'condition' ? 'bg-indigo-500' :
+                      node.type === 'switch' ? 'bg-indigo-500' :
+                      node.type === 'foreach' ? 'bg-amber-500' :
+                      node.type === 'agent' ? 'bg-fuchsia-500' :
+                      node.type === 'wait' ? 'bg-amber-500' : 'bg-slate-400';
 
     const children = node.to?.filter(c => !c.prompt).map(c => workflow[c.id]).filter(Boolean) as WorkflowNode[];
     const trueBranch = node.to?.filter(c => c.prompt === 'True').map(c => workflow[c.id]).filter(Boolean) as WorkflowNode[];
@@ -1441,29 +1439,29 @@ export default function App() {
         <div className={`w-40 h-16 rounded-[10px] ${colorClass} shadow-sm mb-4`} />
         
         {node.type === 'condition' && (
-          <div className="flex gap-20 mb-4">
+          <div className="flex gap-12 mb-4">
             <div className="flex flex-col items-center">
-              <div className="w-32 h-8 bg-green-500 rounded-[10px] mb-2" />
+              <div className="w-24 h-6 bg-emerald-500/20 border border-emerald-500/30 rounded-[10px] mb-2" />
               {trueBranch.map(child => <MinimapNode key={child.id} node={child} />)}
             </div>
             <div className="flex flex-col items-center">
-              <div className="w-32 h-8 bg-red-500 rounded-[10px] mb-2" />
+              <div className="w-24 h-6 bg-rose-500/20 border border-rose-500/30 rounded-[10px] mb-2" />
               {falseBranch.map(child => <MinimapNode key={child.id} node={child} />)}
             </div>
           </div>
         )}
 
         {node.type === 'foreach' && (
-          <div className="p-4 border-2 border-dashed border-slate-300 rounded-[10px] mb-4 flex flex-col items-center">
+          <div className="p-4 border border-dashed border-slate-200 dark:border-slate-800 rounded-[10px] mb-4 flex flex-col items-center">
             {loopBody.map(child => <MinimapNode key={child.id} node={child} />)}
           </div>
         )}
 
         {node.type === 'switch' && (
-          <div className="flex gap-12 mb-4">
+          <div className="flex gap-8 mb-4">
             {switchPaths.map(child => (
               <div key={child.id} className="flex flex-col items-center">
-                <div className="w-24 h-6 bg-slate-300 rounded-[10px] mb-2" />
+                <div className="w-20 h-6 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-[10px] mb-2" />
                 <MinimapNode node={child} />
               </div>
             ))}
@@ -1471,10 +1469,10 @@ export default function App() {
         )}
 
         {(node.type === 'agent' || node.type === 'trigger') && (
-          <div className="flex gap-12 mb-4">
+          <div className="flex gap-8 mb-4">
             {agentPaths.map(child => (
               <div key={child.id} className="flex flex-col items-center">
-                <div className="w-24 h-6 bg-slate-300 rounded-[10px] mb-2" />
+                <div className="w-20 h-6 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-[10px] mb-2" />
                 <MinimapNode node={child} />
               </div>
             ))}
@@ -1509,9 +1507,9 @@ export default function App() {
             e.stopPropagation();
             setActivePopoverId(isOpen ? null : buttonId);
           }}
-          className="w-10 h-10 flex-shrink-0 rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-blue-500 hover:border-blue-500 hover:scale-110 transition-all flex items-center justify-center shadow-md group z-30"
+          className="w-8 h-8 flex-shrink-0 rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-400 hover:text-blue-500 hover:border-blue-500 hover:scale-110 transition-all flex items-center justify-center shadow-sm group z-30"
         >
-          <Plus size={20} className={`${isOpen ? 'rotate-45' : ''} transition-transform`} />
+          <Plus size={16} className={`${isOpen ? 'rotate-45' : ''} transition-transform`} />
         </button>
 
         <AnimatePresence>
@@ -1525,81 +1523,83 @@ export default function App() {
                 initial={{ opacity: 0, y: 10, scale: 0.95 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                className="absolute top-full mt-2 left-1/2 -translate-x-1/2 w-56 bg-white dark:bg-slate-900 rounded-[10px] shadow-xl border border-slate-100 dark:border-slate-800 py-2 z-[100] overflow-hidden"
+                className="absolute top-full mt-2 left-1/2 -translate-x-1/2 w-80 bg-white dark:bg-slate-900 rounded-[10px] shadow-2xl border border-slate-100 dark:border-slate-800 p-3 z-[100]"
               >
-                <button 
-                  onClick={() => {
-                    setModalContext({ parentId, prompt: getPrompt(), pathId, pendingType: 'action' });
-                    setIsModalOpen(true);
-                    setActivePopoverId(null);
-                  }}
-                  className="w-full px-4 py-2.5 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-3 transition-colors"
-                >
-                  <div className="w-8 h-8 rounded-[10px] bg-blue-50 dark:bg-blue-900/30 text-blue-500 dark:text-blue-400 flex items-center justify-center">
-                    <Play size={16} />
-                  </div>
-                  <span className="font-medium">Perform an action</span>
-                </button>
-                <button 
-                  onClick={() => {
-                    addNode('condition', undefined, { parentId, prompt: getPrompt(), pathId });
-                    setActivePopoverId(null);
-                  }}
-                  className="w-full px-4 py-2.5 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-3 transition-colors"
-                >
-                  <div className="w-8 h-8 rounded-[10px] bg-indigo-50 dark:bg-indigo-900/30 text-indigo-500 dark:text-indigo-400 flex items-center justify-center">
-                    <GitBranch size={16} />
-                  </div>
-                  <span className="font-medium">Condition</span>
-                </button>
-                <button 
-                  onClick={() => {
-                    addNode('agent', undefined, { parentId, prompt: getPrompt(), pathId });
-                    setActivePopoverId(null);
-                  }}
-                  className="w-full px-4 py-2.5 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-3 transition-colors"
-                >
-                  <div className="w-8 h-8 rounded-[10px] bg-pink-50 dark:bg-pink-900/30 text-pink-500 dark:text-pink-400 flex items-center justify-center">
-                    <Cpu size={16} />
-                  </div>
-                  <span className="font-medium">Enter AI agent</span>
-                </button>
-                <button 
-                  onClick={() => {
-                    addNode('wait', undefined, { parentId, prompt: getPrompt(), pathId });
-                    setActivePopoverId(null);
-                  }}
-                  className="w-full px-4 py-2.5 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-3 transition-colors"
-                >
-                  <div className="w-8 h-8 rounded-[10px] bg-amber-50 dark:bg-amber-900/30 text-amber-500 dark:text-amber-400 flex items-center justify-center">
-                    <Clock size={16} />
-                  </div>
-                  <span className="font-medium">Wait</span>
-                </button>
-                <button 
-                  onClick={() => {
-                    addNode('foreach', undefined, { parentId, prompt: getPrompt(), pathId });
-                    setActivePopoverId(null);
-                  }}
-                  className="w-full px-4 py-2.5 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-3 transition-colors"
-                >
-                  <div className="w-8 h-8 rounded-[10px] bg-amber-50 dark:bg-amber-900/30 text-amber-500 dark:text-amber-400 flex items-center justify-center">
-                    <Repeat size={16} />
-                  </div>
-                  <span className="font-medium">For Each</span>
-                </button>
-                <button 
-                  onClick={() => {
-                    addNode('switch', undefined, { parentId, prompt: getPrompt(), pathId });
-                    setActivePopoverId(null);
-                  }}
-                  className="w-full px-4 py-2.5 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-3 transition-colors"
-                >
-                  <div className="w-8 h-8 rounded-[10px] bg-indigo-50 dark:bg-indigo-900/30 text-indigo-500 dark:text-indigo-400 flex items-center justify-center">
-                    <Split size={16} />
-                  </div>
-                  <span className="font-medium">Switch</span>
-                </button>
+                <div className="grid grid-cols-2 gap-2">
+                  <button 
+                    onClick={() => {
+                      setModalContext({ parentId, prompt: getPrompt(), pathId, pendingType: 'action' });
+                      setIsModalOpen(true);
+                      setActivePopoverId(null);
+                    }}
+                    className="flex flex-col items-center gap-2 p-3 rounded-[10px] hover:bg-slate-50 dark:hover:bg-slate-800 transition-all group/item"
+                  >
+                    <div className="p-2.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-[10px] group-hover/item:scale-110 transition-transform">
+                      <Zap size={18} />
+                    </div>
+                    <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Action</span>
+                  </button>
+                  <button 
+                    onClick={() => {
+                      addNode('condition', undefined, { parentId, prompt: getPrompt(), pathId });
+                      setActivePopoverId(null);
+                    }}
+                    className="flex flex-col items-center gap-2 p-3 rounded-[10px] hover:bg-slate-50 dark:hover:bg-slate-800 transition-all group/item"
+                  >
+                    <div className="p-2.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-[10px] group-hover/item:scale-110 transition-transform">
+                      <GitBranch size={18} />
+                    </div>
+                    <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Condition</span>
+                  </button>
+                  <button 
+                    onClick={() => {
+                      addNode('agent', undefined, { parentId, prompt: getPrompt(), pathId });
+                      setActivePopoverId(null);
+                    }}
+                    className="flex flex-col items-center gap-2 p-3 rounded-[10px] hover:bg-slate-50 dark:hover:bg-slate-800 transition-all group/item"
+                  >
+                    <div className="p-2.5 bg-fuchsia-50 dark:bg-fuchsia-900/30 text-fuchsia-600 dark:text-fuchsia-400 rounded-[10px] group-hover/item:scale-110 transition-transform">
+                      <Cpu size={18} />
+                    </div>
+                    <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">AI Agent</span>
+                  </button>
+                  <button 
+                    onClick={() => {
+                      addNode('wait', undefined, { parentId, prompt: getPrompt(), pathId });
+                      setActivePopoverId(null);
+                    }}
+                    className="flex flex-col items-center gap-2 p-3 rounded-[10px] hover:bg-slate-50 dark:hover:bg-slate-800 transition-all group/item"
+                  >
+                    <div className="p-2.5 bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-[10px] group-hover/item:scale-110 transition-transform">
+                      <Clock size={18} />
+                    </div>
+                    <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Wait</span>
+                  </button>
+                  <button 
+                    onClick={() => {
+                      addNode('foreach', undefined, { parentId, prompt: getPrompt(), pathId });
+                      setActivePopoverId(null);
+                    }}
+                    className="flex flex-col items-center gap-2 p-3 rounded-[10px] hover:bg-slate-50 dark:hover:bg-slate-800 transition-all group/item"
+                  >
+                    <div className="p-2.5 bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-[10px] group-hover/item:scale-110 transition-transform">
+                      <Repeat size={18} />
+                    </div>
+                    <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">For Each</span>
+                  </button>
+                  <button 
+                    onClick={() => {
+                      addNode('switch', undefined, { parentId, prompt: getPrompt(), pathId });
+                      setActivePopoverId(null);
+                    }}
+                    className="flex flex-col items-center gap-2 p-3 rounded-[10px] hover:bg-slate-50 dark:hover:bg-slate-800 transition-all group/item"
+                  >
+                    <div className="p-2.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-[10px] group-hover/item:scale-110 transition-transform">
+                      <Split size={18} />
+                    </div>
+                    <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Switch</span>
+                  </button>
+                </div>
               </motion.div>
             </>
           )}
@@ -1640,19 +1640,19 @@ export default function App() {
         >
           {!workflow || !workflow['start'] ? (
             <div className="flex flex-col items-center justify-center text-center pointer-events-auto">
-              <div className="w-20 h-20 bg-indigo-100 text-indigo-600 rounded-[10px] flex items-center justify-center mb-6 shadow-inner">
-                <Zap size={40} />
+              <div className="w-16 h-16 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-[10px] flex items-center justify-center mb-6 border border-indigo-100 dark:border-indigo-900/50">
+                <Zap size={32} />
               </div>
-              <h1 className="text-3xl font-bold text-slate-800 mb-2">Build your workflow</h1>
-              <p className="text-slate-500 mb-8 max-w-xs">Start by adding a trigger to define how your automation begins.</p>
+              <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-2 tracking-tight">Build your workflow</h1>
+              <p className="text-slate-500 dark:text-slate-400 mb-8 max-w-xs text-sm">Start by adding a trigger to define how your automation begins.</p>
               <button
                 onClick={() => {
                   setModalContext({ parentId: null });
                   setIsModalOpen(true);
                 }}
-                className="px-8 py-3 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all flex items-center gap-2"
+                className="px-6 py-2.5 bg-indigo-600 text-white rounded-[10px] text-sm font-semibold hover:bg-indigo-700 transition-all flex items-center gap-2 shadow-sm"
               >
-                <Plus size={20} />
+                <Plus size={18} />
                 Add Trigger
               </button>
             </div>
@@ -1761,30 +1761,30 @@ export default function App() {
           dragMomentum={false}
           onMouseDown={(e) => e.stopPropagation()}
           style={{ x: '-50%' }}
-          className="absolute bottom-8 left-1/2 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 p-2 flex items-center gap-1 z-50 cursor-default"
+          className="absolute bottom-8 left-1/2 bg-white dark:bg-slate-900 rounded-[10px] shadow-2xl border border-slate-200 dark:border-slate-800 p-1.5 flex items-center gap-1 z-50 cursor-default"
         >
           <div className="px-2 text-slate-300 dark:text-slate-700 cursor-grab active:cursor-grabbing">
-            <GripHorizontal size={20} />
+            <GripHorizontal size={18} />
           </div>
           
           <div className="w-px h-6 bg-slate-100 dark:bg-slate-800 mx-1" />
 
           <button 
             onClick={createNewWorkflow}
-            className="p-2.5 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl text-slate-600 dark:text-slate-400 transition-all flex items-center gap-2 group"
+            className="p-2 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg text-slate-600 dark:text-slate-400 transition-all flex items-center gap-2 group"
             title="New Workflow"
           >
-            <FilePlus size={18} className="group-hover:text-blue-500" />
-            <span className="text-xs font-bold pr-1">New</span>
+            <FilePlus size={16} className="group-hover:text-indigo-500" />
+            <span className="text-[11px] font-bold pr-1">New</span>
           </button>
 
           <button 
             onClick={() => fileInputRef.current?.click()}
-            className="p-2.5 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl text-slate-600 dark:text-slate-400 transition-all flex items-center gap-2 group"
+            className="p-2 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg text-slate-600 dark:text-slate-400 transition-all flex items-center gap-2 group"
             title="Upload JSON"
           >
-            <Upload size={18} className="group-hover:text-blue-500" />
-            <span className="text-xs font-bold pr-1">Import</span>
+            <Upload size={16} className="group-hover:text-indigo-500" />
+            <span className="text-[11px] font-bold pr-1">Import</span>
             <input 
               type="file" 
               ref={fileInputRef} 
@@ -1797,11 +1797,11 @@ export default function App() {
           <button 
             onClick={downloadWorkflow}
             disabled={!workflow}
-            className="p-2.5 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl text-slate-600 dark:text-slate-400 transition-all flex items-center gap-2 group disabled:opacity-30"
+            className="p-2 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg text-slate-600 dark:text-slate-400 transition-all flex items-center gap-2 group disabled:opacity-30"
             title="Download JSON"
           >
-            <Download size={18} className="group-hover:text-blue-500" />
-            <span className="text-xs font-bold pr-1">Export</span>
+            <Download size={16} className="group-hover:text-indigo-500" />
+            <span className="text-[11px] font-bold pr-1">Export</span>
           </button>
 
           <div className="w-px h-6 bg-slate-100 dark:bg-slate-800 mx-1" />
@@ -1809,19 +1809,19 @@ export default function App() {
           <button 
             onClick={saveWorkflow}
             disabled={!workflow}
-            className="p-2.5 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl text-slate-600 dark:text-slate-400 transition-all flex items-center gap-2 group disabled:opacity-30"
+            className="p-2 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg text-slate-600 dark:text-slate-400 transition-all flex items-center gap-2 group disabled:opacity-30"
             title="Save Workflow"
           >
-            <Save size={18} className="group-hover:text-blue-500" />
-            <span className="text-xs font-bold pr-1">Save</span>
+            <Save size={16} className="group-hover:text-indigo-500" />
+            <span className="text-[11px] font-bold pr-1">Save</span>
           </button>
 
           <button 
             onClick={publishWorkflow}
             disabled={!workflow}
-            className="px-5 py-2.5 bg-blue-600 text-white rounded-xl font-bold text-xs hover:bg-blue-700 transition-all flex items-center gap-2 shadow-lg shadow-blue-100 dark:shadow-none disabled:opacity-30 disabled:shadow-none"
+            className="px-4 py-2 bg-indigo-600 text-white rounded-[10px] font-bold text-[11px] hover:bg-indigo-700 transition-all flex items-center gap-2 shadow-sm disabled:opacity-30"
           >
-            <Send size={16} />
+            <Send size={14} />
             Publish
           </button>
         </motion.div>
@@ -1852,14 +1852,14 @@ export default function App() {
             </div>
 
             {/* Tabs */}
-            <div className="flex border-b border-slate-100 dark:border-slate-800 px-6">
+            <div className="flex border-b border-slate-100 dark:border-slate-800 px-6 gap-6">
               {['Parameters', 'Code View', 'About'].map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  className={`py-3 px-2 text-[11px] font-bold uppercase tracking-wider transition-all relative ${
+                  className={`py-4 text-[11px] font-bold uppercase tracking-wider transition-all relative ${
                     activeTab === tab 
-                      ? 'text-blue-600 dark:text-blue-400' 
+                      ? 'text-indigo-600 dark:text-indigo-400' 
                       : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
                   }`}
                 >
@@ -1867,7 +1867,7 @@ export default function App() {
                   {activeTab === tab && (
                     <motion.div 
                       layoutId="activeTab"
-                      className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400"
+                      className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 dark:bg-indigo-400"
                     />
                   )}
                 </button>
@@ -1879,7 +1879,7 @@ export default function App() {
                 <div className="space-y-8">
                   {/* Name always as first position */}
                   <section>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">Name</label>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">Name</label>
                     <input 
                       type="text" 
                       value={selectedNode.label}
@@ -1889,17 +1889,17 @@ export default function App() {
                         if (node) node.label = e.target.value;
                         setWorkflow(updatedWorkflow);
                       }}
-                      className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm font-medium dark:text-slate-200"
+                      className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-[10px] focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all text-sm font-medium dark:text-slate-200"
                     />
                   </section>
 
                   {/* AI Agent Prompt (if applicable) */}
                   {selectedNode.type === 'agent' && (
-                    <section className="space-y-6">
+                    <section className="space-y-4">
                       <div>
-                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">AI AGENT PROMPT</label>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">AI Agent Prompt</label>
                         <textarea 
-                          className="w-full h-40 px-4 py-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm leading-relaxed dark:text-slate-200"
+                          className="w-full h-40 px-4 py-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-[10px] focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all text-sm leading-relaxed dark:text-slate-200"
                           placeholder="You're a support agent resolving customer queries..."
                           value={selectedNode.prompt || ''}
                           onChange={(e) => {
@@ -1917,7 +1917,7 @@ export default function App() {
                   {/* Wait Duration (if applicable) */}
                   {selectedNode.type === 'wait' && (
                     <section>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">Wait Duration (seconds)</label>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">Wait Duration (seconds)</label>
                       <input 
                         type="number" 
                         value={selectedNode.duration || 60}
@@ -1928,7 +1928,7 @@ export default function App() {
                             setWorkflow(updatedWorkflow);
                           }
                         }}
-                        className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm font-medium dark:text-slate-200"
+                        className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-[10px] focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all text-sm font-medium dark:text-slate-200"
                       />
                     </section>
                   )}
@@ -1981,7 +1981,7 @@ export default function App() {
                                     placeholder={param.placeholder}
                                     value={value || ''}
                                     onChange={(e) => updateParam(e.target.value)}
-                                    className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm font-medium dark:text-slate-200"
+                                    className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-[10px] focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all text-sm font-medium dark:text-slate-200"
                                   />
                                 )}
 
@@ -1990,7 +1990,7 @@ export default function App() {
                                     placeholder={param.placeholder}
                                     value={value || ''}
                                     onChange={(e) => updateParam(e.target.value)}
-                                    className="w-full h-32 px-4 py-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm leading-relaxed dark:text-slate-200"
+                                    className="w-full h-32 px-4 py-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-[10px] focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all text-sm leading-relaxed dark:text-slate-200"
                                   />
                                 )}
 
@@ -1999,7 +1999,7 @@ export default function App() {
                                     <select 
                                       value={value || ''}
                                       onChange={(e) => updateParam(e.target.value)}
-                                      className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm font-medium dark:text-slate-200 appearance-none pr-10"
+                                      className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-[10px] focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all text-sm font-medium dark:text-slate-200 appearance-none pr-10"
                                     >
                                       <option value="" disabled>Select {param.label}</option>
                                       {param.options.map((opt: any) => (
@@ -2096,7 +2096,7 @@ export default function App() {
                                     setWorkflow(updatedWorkflow);
                                   }
                                 }}
-                                className="flex-1 px-3 py-2 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg text-xs dark:text-slate-200"
+                                className="flex-1 px-3 py-2 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-[10px] text-xs dark:text-slate-200"
                                 placeholder={selectedNode.type === 'switch' ? `Case ${idx + 1}` : `Path ${idx + 1}`}
                               />
                               <button 
@@ -2129,7 +2129,7 @@ export default function App() {
                             setWorkflow(updatedWorkflow);
                           }
                         }}
-                        className="w-full py-4 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-400 hover:border-blue-500 hover:text-blue-500 transition-all flex items-center justify-center gap-2"
+                        className="w-full py-4 border border-dashed border-slate-200 dark:border-slate-700 rounded-[10px] text-xs font-bold text-slate-400 hover:border-indigo-500 hover:text-indigo-500 transition-all flex items-center justify-center gap-2"
                       >
                         <Plus size={14} /> {selectedNode.type === 'switch' ? 'Add case' : 'Add path'}
                       </button>
@@ -2211,15 +2211,15 @@ export default function App() {
               className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
             />
             <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
+              initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl overflow-hidden flex flex-col max-h-[85vh] border-[2px] border-teal-400/40"
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-[10px] shadow-2xl overflow-hidden flex flex-col max-h-[85vh] border border-slate-200 dark:border-slate-800"
             >
-              <div className="p-10 pb-6">
-                <div className="flex items-center justify-between mb-8">
-                  <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
-                    {!workflow || isChangingTrigger ? 'Choose a Trigger' : 'Choose a Action'}
+              <div className="p-8 pb-4">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">
+                    {!workflow || isChangingTrigger ? 'Choose a Trigger' : 'Choose an Action'}
                   </h2>
                   <button 
                     onClick={() => {
@@ -2228,7 +2228,7 @@ export default function App() {
                       setChangingNodeId(null);
                       setSearchQuery('');
                     }}
-                    className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-slate-400 transition-all"
+                    className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 transition-all"
                   >
                     <X size={20} />
                   </button>
@@ -2237,10 +2237,10 @@ export default function App() {
                 <div className="relative">
                   <input 
                     type="text"
-                    placeholder="Search"
+                    placeholder="Search for triggers or actions..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full px-5 py-3.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-teal-400/30 focus:border-teal-400 outline-none transition-all text-sm shadow-sm placeholder:text-slate-400"
+                    className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-[10px] focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all text-sm shadow-sm placeholder:text-slate-400"
                   />
                 </div>
               </div>

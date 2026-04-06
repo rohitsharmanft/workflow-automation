@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 
 @theme {
@@ -6,7 +6,6 @@
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
-/* Test comment */
 :root {
   --bg: #f8fafc;
   --node-bg: #ffffff;
@@ -16,40 +15,71 @@
 
 body {
   background-color: var(--bg);
-  color: #1e293b;
+  color: #0f172a;
   font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .canvas-container {
-  background-color: #fdfdfd;
-  background-image: radial-gradient(#e2e8f0 1px, transparent 1px);
+  background-color: #f8fafc;
+  background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
   background-size: 24px 24px;
 }
 
-.node-shadow {
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+.dark .canvas-container {
+  background-color: #020617;
+  background-image: radial-gradient(#1e293b 1px, transparent 1px);
 }
 
-.node-selected-shadow {
-  box-shadow: 0 0 0 2px #3b82f6, 0 10px 15px -3px rgb(59 130 246 / 0.1);
+.node-shadow {
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+}
+
+.node-hover-shadow {
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
 }
 
 .connection-line-v {
   width: 2px;
-  border-left: 2px dashed #024bf7;
+  background: repeating-linear-gradient(
+    to bottom,
+    #94a3b8,
+    #94a3b8 4px,
+    transparent 4px,
+    transparent 8px
+  );
 }
 
 .dark .connection-line-v {
-  border-left-color: #3b82f6;
+  background: repeating-linear-gradient(
+    to bottom,
+    #334155,
+    #334155 4px,
+    transparent 4px,
+    transparent 8px
+  );
 }
 
 .ai-agent-gradient {
-  border: 2px solid transparent;
-  background-image: linear-gradient(white, white), linear-gradient(to right, #f472b6, #6366f1, #fbbf24);
-  background-origin: border-box;
-  background-clip: padding-box, border-box;
+  position: relative;
+  background: white;
 }
 
 .dark .ai-agent-gradient {
-  background-image: linear-gradient(#0f172a, #0f172a), linear-gradient(to right, #f472b6, #6366f1, #fbbf24);
+  background: #0f172a;
+}
+
+.ai-agent-gradient::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  padding: 2px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #f472b6, #6366f1, #fbbf24);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
 }

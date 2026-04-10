@@ -5,6 +5,8 @@ export interface Connection {
   prompt?: string;
 }
 
+export type RunAfterCondition = 'success' | 'timedOut' | 'skipped' | 'failed';
+
 export interface WorkflowNode {
   id: string;
   type: NodeType;
@@ -21,6 +23,7 @@ export interface WorkflowNode {
   duration?: number;
   parameters?: Record<string, any>;
   code_view?: string;
+  runAfter?: Record<string, RunAfterCondition[]>;
 }
 
 export type Workflow = Record<string, WorkflowNode>;

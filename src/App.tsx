@@ -11,6 +11,7 @@ import {
   Settings2, 
   ChevronRight, 
   ChevronUp,
+  ChevronDown,
   X,
   Zap,
   Play,
@@ -35,150 +36,21 @@ import {
   Search,
   Clock,
   AlertCircle,
+  CheckCircle2,
+  MinusCircle,
   Split,
   Terminal,
   Variable
 } from 'lucide-react';
+import { BaseNode } from './components/nodes/BaseNode';
+import { ConditionNode } from './components/nodes/ConditionNode';
+import { ForEachNode } from './components/nodes/ForEachNode';
+import { SwitchNode } from './components/nodes/SwitchNode';
+import { AddButton as NodeAddButton } from './components/nodes/AddButton';
+import { ConfigPanel } from './components/ConfigPanel';
 import { motion, AnimatePresence } from 'motion/react';
-import { WorkflowNode, Workflow, NodeType, TriggerType, ActionType } from './types';
+import { WorkflowNode, Workflow, NodeType, TriggerType, ActionType, RunAfterCondition } from './types';
 import { TRIGGER_TYPES, ACTION_TYPES, AI_AGENT_TYPES, NODE_ICONS } from './constants';
-
-// JSONTagEditor component for handling variables with @ trigger
-const JSONTagEditor = ({ value, onChange, workflow, placeholder }: any) => {
-  const [showPicker, setShowPicker] = useState(false);
-  const [search, setSearch] = useState('');
-  const [cursorIndex, setCursorIndex] = useState(0);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  const availableVariables = useMemo(() => {
-    if (!workflow) return [];
-    const vars: any[] = [];
-    
-    Object.values(workflow).forEach((node: any) => {
-      // Add the node itself as a variable
-      vars.push({
-        id: node.id,
-        label: node.label,
-        type: node.type
-      });
-
-      // Add specific outputs for certain node types
-      if (node.type === 'trigger' || node.type === 'http-trigger') {
-        vars.push({ id: `${node.id}-body`, label: `${node.label}.body`, type: 'variable' });
-        vars.push({ id: `${node.id}-headers`, label: `${node.label}.headers`, type: 'variable' });
-        // Add a shortcut for the main trigger if it's the start node
-        if (node.id === 'start') {
-          vars.push({ id: 'body-shortcut', label: 'body{}', type: 'variable' });
-          vars.push({ id: 'headers-shortcut', label: 'headers{}', type: 'variable' });
-          vars.push({ id: 'body-simple', label: 'body', type: 'variable' });
-          vars.push({ id: 'headers-simple', label: 'headers', type: 'variable' });
-          vars.push({ id: 'query-simple', label: 'query', type: 'variable' });
-        }
-      }
-      if (node.type === 'agent') {
-        vars.push({ id: `${node.id}-output`, label: `${node.label}.output`, type: 'variable' });
-      }
-    });
-    
-    return vars;
-  }, [workflow]);
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === '@') {
-      const { selectionStart } = e.currentTarget;
-      setCursorIndex(selectionStart);
-      setShowPicker(true);
-      setSearch('');
-    }
-    
-    if (showPicker) {
-      if (e.key === 'Escape') {
-        setShowPicker(false);
-      }
-      if (e.key === 'Enter' && search) {
-        const filtered = availableVariables.filter(v => v.label.toLowerCase().includes(search.toLowerCase()));
-        if (filtered.length > 0) {
-          handleSelect(filtered[0]);
-          e.preventDefault();
-        }
-      }
-    }
-  };
-
-  const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const val = e.target.value;
-    onChange(val);
-    
-    if (showPicker) {
-      const textSinceAt = val.substring(cursorIndex + 1, e.target.selectionStart);
-      if (textSinceAt.includes(' ') || textSinceAt.includes('\n')) {
-        setShowPicker(false);
-      } else {
-        setSearch(textSinceAt);
-      }
-    }
-  };
-
-  const handleSelect = (variable: any) => {
-    const before = value.substring(0, cursorIndex);
-    const after = value.substring(textareaRef.current?.selectionStart || cursorIndex + 1);
-    const newValue = `${before}@${variable.label}${after}`;
-    onChange(newValue);
-    setShowPicker(false);
-    setTimeout(() => {
-      if (textareaRef.current) {
-        textareaRef.current.focus();
-        const newPos = before.length + variable.label.length + 1;
-        textareaRef.current.setSelectionRange(newPos, newPos);
-      }
-    }, 0);
-  };
-
-  return (
-    <div className="relative group w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl focus-within:ring-2 focus-within:ring-blue-500 transition-all overflow-hidden">
-      <textarea 
-        ref={textareaRef}
-        placeholder={placeholder || '{\n  "key": "value"\n}'}
-        value={value || ''}
-        onKeyDown={handleKeyDown}
-        onChange={handleInput}
-        spellCheck="false"
-        className="w-full h-48 px-4 py-3 bg-transparent border-none outline-none text-sm font-mono leading-relaxed text-slate-900 dark:text-slate-100 caret-blue-500 dark:caret-blue-400 relative z-10 selection:bg-blue-500/30 resize-none"
-      />
-
-      <AnimatePresence>
-        {showPicker && (
-          <motion.div 
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 10 }}
-            className="absolute z-20 left-4 right-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl overflow-hidden max-h-48 overflow-y-auto"
-            style={{ top: '100%', marginTop: '8px' }}
-          >
-            <div className="p-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Select Variable</span>
-            </div>
-            {availableVariables.filter(v => v.label.toLowerCase().includes(search.toLowerCase())).map(v => (
-              <button
-                key={v.id}
-                onClick={() => handleSelect(v)}
-                className="w-full px-4 py-2 text-left text-xs font-medium hover:bg-blue-50 dark:hover:bg-blue-900/20 text-slate-700 dark:text-slate-300 flex items-center gap-2 transition-colors"
-              >
-                <div className="w-5 h-5 rounded bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center text-purple-600 dark:text-purple-400">
-                  <span className="italic text-[10px] font-bold">fx</span>
-                </div>
-                {v.label}
-              </button>
-            ))}
-            {availableVariables.filter(v => v.label.toLowerCase().includes(search.toLowerCase())).length === 0 && (
-              <div className="p-4 text-center text-xs text-slate-400 italic">No variables found</div>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-};
 
 export default function App() {
   const [workflow, setWorkflow] = useState<Workflow | null>(null);
@@ -200,6 +72,8 @@ export default function App() {
   const [connectingFrom, setConnectingFrom] = useState<{ parentId: string | null; prompt?: string; pathId?: string } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [collapsedCategories, setCollapsedCategories] = useState<string[]>([]);
+  const [expandedRunAfter, setExpandedRunAfter] = useState(true);
+  const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({});
 
   // Zoom and Pan state
   const [zoom, setZoom] = useState(0.6);
@@ -214,47 +88,11 @@ export default function App() {
   const migrateWorkflow = (data: any): Workflow => {
     if (!data) return {};
     
-    // If it's already a flat map (Record<string, WorkflowNode>)
-    if (typeof data === 'object' && !Array.isArray(data) && (data.start || Object.keys(data).length > 0)) {
-      const migrated: Workflow = {};
-      Object.keys(data).forEach(id => {
-        const node = data[id];
-        const nodeType = node.type === 'ai-agent' ? 'agent' : node.type;
-        
-        const typeInfo = nodeType === 'trigger' 
-          ? TRIGGER_TYPES.find(t => t.id === node.triggerKey)
-          : nodeType === 'action' 
-            ? ACTION_TYPES.find(a => a.id === node.actionKey)
-            : null;
-            
-        const codeView = node.code_view || typeInfo?.code_view;
-        let parameters = node.parameters || {};
-        
-        if (codeView && !parameters.inputs) {
-          parameters = { inputs: parameters };
-        }
-
-        migrated[id] = {
-          ...node,
-          type: nodeType,
-          to: node.to || [],
-          code_view: codeView,
-          parameters
-        };
-        
-        if ((nodeType === 'agent' || nodeType === 'trigger') && (!node.paths || node.paths.length === 0)) {
-          migrated[id].paths = nodeType === 'trigger' 
-            ? [{ id: uuidv4(), label: 'Path 1' }]
-            : [{ id: uuidv4(), label: 'Path 1' }, { id: uuidv4(), label: 'Path 2' }];
-        }
-      });
-      return migrated;
-    }
-
-    // If it's the old tree structure (a single node)
-    if (data.id && data.type) {
+    // 1. Handle old tree structure (a single node with children/branches/paths)
+    if (data.id && data.type && !data.start) {
       const flatMap: Workflow = {};
       const traverse = (node: any) => {
+        if (!node || !node.id) return;
         const nodeType = node.type === 'ai-agent' ? 'agent' : node.type;
         const typeInfo = nodeType === 'trigger' 
           ? TRIGGER_TYPES.find(t => t.id === node.triggerKey)
@@ -265,8 +103,13 @@ export default function App() {
         const codeView = node.code_view || typeInfo?.code_view;
         let parameters = node.parameters || {};
         
-        if (codeView && !parameters.inputs) {
-          parameters = { inputs: parameters };
+        if (codeView) {
+          if (!parameters.inputs) {
+            parameters = { inputs: { ...parameters } };
+          }
+        } else if (parameters.inputs) {
+          parameters = { ...parameters, ...parameters.inputs };
+          delete parameters.inputs;
         }
 
         const newNode: WorkflowNode = {
@@ -333,17 +176,64 @@ export default function App() {
       if (!flatMap['start'] && data.id) {
         const rootId = data.id;
         const rootNode = flatMap[rootId];
-        delete flatMap[rootId];
-        rootNode.id = 'start';
-        flatMap['start'] = rootNode;
-        
-        Object.values(flatMap).forEach(n => {
-          n.to.forEach(c => {
-            if (c.id === rootId) c.id = 'start';
+        if (rootNode) {
+          delete flatMap[rootId];
+          rootNode.id = 'start';
+          flatMap['start'] = rootNode;
+          
+          Object.values(flatMap).forEach(n => {
+            n.to.forEach(c => {
+              if (c.id === rootId) c.id = 'start';
+            });
           });
-        });
+        }
       }
       return flatMap;
+    }
+
+    // 2. Handle flat map structure (Record<string, WorkflowNode>)
+    if (typeof data === 'object' && !Array.isArray(data)) {
+      const migrated: Workflow = {};
+      Object.keys(data).forEach(id => {
+        const node = data[id];
+        if (!node || typeof node !== 'object' || !node.type) return;
+
+        const nodeType = node.type === 'ai-agent' ? 'agent' : node.type;
+        
+        const typeInfo = nodeType === 'trigger' 
+          ? TRIGGER_TYPES.find(t => t.id === node.triggerKey)
+          : nodeType === 'action' 
+            ? ACTION_TYPES.find(a => a.id === node.actionKey)
+            : null;
+            
+        const codeView = node.code_view || typeInfo?.code_view;
+        let parameters = node.parameters || {};
+        
+        if (codeView) {
+          if (!parameters.inputs) {
+            parameters = { inputs: { ...parameters } };
+          }
+        } else if (parameters.inputs) {
+          parameters = { ...parameters, ...parameters.inputs };
+          delete parameters.inputs;
+        }
+
+        migrated[id] = {
+          ...node,
+          id: node.id || id,
+          type: nodeType,
+          to: node.to || [],
+          code_view: codeView,
+          parameters
+        };
+        
+        if ((nodeType === 'agent' || nodeType === 'trigger') && (!node.paths || node.paths.length === 0)) {
+          migrated[id].paths = nodeType === 'trigger' 
+            ? [{ id: uuidv4(), label: 'Path 1' }]
+            : [{ id: uuidv4(), label: 'Path 1' }, { id: uuidv4(), label: 'Path 2' }];
+        }
+      });
+      return migrated;
     }
 
     return data;
@@ -618,6 +508,74 @@ export default function App() {
     return workflow[selectedNodeId] || null;
   }, [workflow, selectedNodeId]);
 
+  const getPrecedingNodes = useCallback((nodeId: string) => {
+    if (!workflow) return [];
+    return Object.values(workflow).filter(n => 
+      n.to?.some(c => c.id === nodeId) || 
+      n.paths?.some(p => p.nodeId === nodeId)
+    );
+  }, [workflow]);
+
+  const isEligibleForRunAfter = useCallback((nodeId: string, customWorkflow?: Workflow) => {
+    const targetWorkflow = customWorkflow || workflow;
+    const node = targetWorkflow?.[nodeId];
+    if (!node) return false;
+    
+    const eligibleTypes = ['action', 'condition', 'agent', 'switch'];
+    if (!eligibleTypes.includes(node.type)) return false;
+
+    // Check branch restrictions
+    const checkBranchRestrictions = (id: string): boolean => {
+      let foundParent: WorkflowNode | null = null;
+      let isBranchPath = false;
+      
+      // We only restrict the IMMEDIATE first node of a branch (True/False or Switch Case)
+      Object.values(targetWorkflow!).forEach(n => {
+        // Check paths (Switch, Agent)
+        if (n.paths?.some(p => p.nodeId === id)) {
+          foundParent = n;
+          isBranchPath = true;
+        } 
+        // Check 'to' connections (Condition branches)
+        else {
+          const connection = n.to?.find(c => c.id === id);
+          if (connection) {
+            foundParent = n;
+            if (connection.prompt) {
+              isBranchPath = true;
+            }
+          }
+        }
+      });
+      
+      if (foundParent) {
+        // If this node is the direct start of a branch from a Condition or Switch, restrict it
+        if (isBranchPath && (foundParent.type === 'condition' || foundParent.type === 'switch')) {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    if (checkBranchRestrictions(nodeId)) return false;
+
+    return true;
+  }, [workflow]);
+
+  const updateRunAfter = (nodeId: string, precedingId: string, conditions: RunAfterCondition[]) => {
+    if (!workflow) return;
+    const updatedWorkflow = { ...workflow };
+    const node = updatedWorkflow[nodeId];
+    if (node) {
+      if (!node.runAfter) node.runAfter = {};
+      if (conditions.length === 0) {
+        delete node.runAfter[precedingId];
+      } else {
+        node.runAfter[precedingId] = conditions;
+      }
+      setWorkflow(updatedWorkflow);
+    }
+  };
   const addNode = (type: NodeType, subType?: string, overrideContext?: any) => {
     const context = overrideContext || modalContext;
     const nodeId = uuidv4();
@@ -861,15 +819,19 @@ export default function App() {
       updatedWorkflow[nodeId] = newNode;
       
       if (updatedWorkflow[parentId!]) {
-        const parent = updatedWorkflow[parentId!];
+        const parent = { ...updatedWorkflow[parentId!] };
         if (pathId && parent.paths) {
-          const path = parent.paths.find(p => p.id === pathId);
-          if (path) {
-            path.nodeId = nodeId;
-          }
+          parent.paths = parent.paths.map(p => 
+            p.id === pathId ? { ...p, nodeId } : p
+          );
         } else {
-          if (!parent.to) parent.to = [];
-          parent.to.push({ id: nodeId, prompt });
+          parent.to = [...parent.to, { id: nodeId, prompt }];
+        }
+        updatedWorkflow[parentId!] = parent;
+
+        // Initialize runAfter for the new node with 'success' from its parent
+        if (isEligibleForRunAfter(nodeId, updatedWorkflow)) {
+          newNode.runAfter = { [parentId!]: ['success'] };
         }
       }
       
@@ -925,21 +887,38 @@ export default function App() {
     if (!workflow || !node) return null;
     const { isFirst = false, hideLabel = false, parentId = null, prompt = undefined, pathId = undefined } = options;
     
-    const Icon = NODE_ICONS[node.type] || Play;
     const isSelected = selectedNodeId === node.id;
 
-    const children = node.to?.filter(c => !c.prompt).map(c => workflow[c.id]).filter(Boolean) as WorkflowNode[];
-    const trueBranch = node.to?.filter(c => c.prompt === 'True').map(c => workflow[c.id]).filter(Boolean) as WorkflowNode[];
-    const falseBranch = node.to?.filter(c => c.prompt === 'False').map(c => workflow[c.id]).filter(Boolean) as WorkflowNode[];
-    const loopBody = node.to?.filter(c => c.prompt === 'loop').map(c => workflow[c.id]).filter(Boolean) as WorkflowNode[];
-    const switchPaths = (node.type === 'switch') ? node.paths?.map(p => ({
-      ...p,
-      node: p.nodeId ? workflow[p.nodeId] : undefined
-    })) || [] : [];
-    const agentPaths = (node.type === 'agent' || node.type === 'trigger') ? node.paths?.map(p => ({
-      ...p,
-      node: p.nodeId ? workflow[p.nodeId] : undefined
-    })) || [] : [];
+    const nodeProps = {
+      node,
+      isSelected,
+      connectingFrom,
+      handleConnectToNode,
+      setSelectedNodeId,
+      setNodeMenuId,
+      nodeMenuId,
+      deleteNode,
+      setChangingNodeId,
+      setIsChangingTrigger,
+      setModalContext,
+      setIsModalOpen,
+      workflow,
+      renderNode,
+      nodeRefs,
+      activePopoverId,
+      isDarkMode,
+      setWorkflow,
+      AddButton: (props: any) => (
+        <NodeAddButton 
+          {...props} 
+          activePopoverId={activePopoverId}
+          setActivePopoverId={setActivePopoverId}
+          setModalContext={setModalContext}
+          setIsModalOpen={setIsModalOpen}
+          addNode={addNode}
+        />
+      )
+    };
 
     const isAnyChildPopoverOpen = activePopoverId?.includes(node.id);
 
@@ -968,417 +947,14 @@ export default function App() {
         {hideLabel && <div className="h-10 connection-line-v" />}
 
         {/* Node Card */}
-        {node.type !== 'foreach' && node.type !== 'condition' && node.type !== 'switch' ? (
-          <motion.div
-            layoutId={node.id}
-            onClick={(e) => {
-              e.stopPropagation();
-              if (connectingFrom) {
-                if (node.type !== 'trigger') {
-                  handleConnectToNode(node.id);
-                }
-                return;
-              }
-              setSelectedNodeId(node.id);
-            }}
-            className={`
-              relative group flex items-center gap-4 p-4 rounded-[10px] border transition-all cursor-pointer w-80 bg-white dark:bg-slate-900 shadow-sm hover:shadow-md
-              ${node.type === 'agent' ? 'ai-agent-gradient' : ''}
-              ${isSelected 
-                ? 'border-indigo-500 ring-2 ring-indigo-500/20' 
-                : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'}
-            `}
-          >
-            <div className={`p-2.5 rounded-[8px] ${
-              isSelected 
-                ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' 
-                : node.type === 'trigger' 
-                  ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'
-                  : node.type === 'agent'
-                    ? 'bg-fuchsia-50 dark:bg-fuchsia-900/30 text-fuchsia-600 dark:text-fuchsia-400'
-                    : node.type === 'wait'
-                      ? 'bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400'
-                      : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
-            }`}>
-              <Icon size={20} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className={`text-[10px] font-bold uppercase tracking-wider mb-0.5 ${
-                node.type === 'trigger' ? 'text-emerald-600 dark:text-emerald-400' : 
-                node.type === 'agent' ? 'text-fuchsia-600 dark:text-fuchsia-400' : 
-                node.type === 'wait' ? 'text-amber-600 dark:text-amber-400' : 
-                'text-slate-500 dark:text-slate-400'
-              }`}>{node.type === 'agent' ? 'AI Agent' : node.type}</p>
-              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">{node.label}</p>
-            </div>
-            <div className="flex flex-col items-end gap-2">
-              <div className="relative">
-                <button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setNodeMenuId(nodeMenuId === node.id ? null : node.id);
-                  }}
-                  className="p-2 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors text-slate-400"
-                >
-                  <MoreHorizontal size={18} />
-                </button>
-                
-                <AnimatePresence>
-                  {nodeMenuId === node.id && (
-                    <>
-                      <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setNodeMenuId(null); }} />
-                      <motion.div
-                        initial={{ opacity: 0, scale: 0.95, y: 5 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.95, y: 5 }}
-                        className="absolute top-full right-0 mt-1 w-40 bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-slate-100 dark:border-slate-800 py-1 z-50 overflow-hidden"
-                      >
-                        {(node.type === 'trigger' || node.type === 'action') && (
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setChangingNodeId(node.id);
-                              if (node.type === 'trigger') {
-                                setIsChangingTrigger(true);
-                              } else {
-                                setModalContext({ parentId: null, pendingType: 'action' });
-                              }
-                              setIsModalOpen(true);
-                              setNodeMenuId(null);
-                            }}
-                            className="w-full px-3 py-2 text-left text-[11px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-2"
-                          >
-                            <Settings2 size={12} />
-                            Change {node.type === 'trigger' ? 'Trigger' : 'Action'}
-                          </button>
-                        )}
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteNode(node.id);
-                            setNodeMenuId(null);
-                          }}
-                          className="w-full px-3 py-2 text-left text-[11px] font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex items-center gap-2"
-                        >
-                          <Trash2 size={12} />
-                          Delete Node
-                        </button>
-
-                      </motion.div>
-                    </>
-                  )}
-                </AnimatePresence>
-              </div>
-            </div>
-          </motion.div>
+        {node.type === 'condition' ? (
+          <ConditionNode {...nodeProps} />
         ) : node.type === 'foreach' ? (
-          <motion.div
-            layoutId={node.id}
-            onClick={(e) => {
-              e.stopPropagation();
-              if (connectingFrom) {
-                if (node.type !== 'trigger') {
-                  handleConnectToNode(node.id);
-                }
-                return;
-              }
-              setSelectedNodeId(node.id);
-            }}
-            className={`
-              relative group flex flex-col w-fit min-w-[32rem] rounded-[10px] border transition-all cursor-pointer bg-white dark:bg-slate-900 shadow-sm hover:shadow-md
-              ${isSelected ? 'border-amber-500 ring-2 ring-amber-500/20' : 'border-slate-200 dark:border-slate-800'}
-            `}
-          >
-            {/* Header Bar */}
-            <div className="bg-amber-500 text-white px-6 py-4 flex items-center justify-between rounded-t-[9px]">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
-                  <Repeat size={18} />
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-[10px] font-bold uppercase tracking-wider opacity-90">Loop</span>
-                  <span className="text-sm font-semibold">For each item</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    deleteNode(node.id);
-                  }}
-                  className="p-2 hover:bg-white/10 rounded-xl transition-colors"
-                >
-                  <Trash2 size={18} />
-                </button>
-                <div className="w-px h-6 bg-white/20 mx-1" />
-                <ChevronUp size={20} className="opacity-60" />
-              </div>
-            </div>
-            
-            {/* Loop Body Container */}
-            <div className="p-10 pt-8 bg-white dark:bg-slate-900 flex flex-col items-center relative backdrop-blur-sm">
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-px h-8 bg-gradient-to-b from-amber-500/50 to-transparent" />
-              
-              <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 text-[10px] font-black uppercase tracking-widest rounded-full mb-8 border border-amber-100 dark:border-amber-900/50">
-                <Play size={10} fill="currentColor" />
-                Loop Start
-              </div>
-              
-              <div className={`w-fit min-w-full border-2 border-dashed border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 rounded-[10px] p-8 shadow-inner min-h-[200px] flex flex-col items-center relative transition-all ${activePopoverId?.includes(`${node.id}-loop`) ? 'z-[60]' : 'hover:z-40'}`}>
-                {loopBody.map((child, idx) => renderNode(child, { isFirst: idx === 0, hideLabel: idx === 0, parentId: node.id, prompt: 'loop' }))}
-                {(!loopBody || loopBody.length === 0) && (
-                  <AddButton parentId={node.id} branch="loop" />
-                )}
-              </div>
-
-              <div className="mt-8 inline-flex items-center gap-2 px-4 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-400 text-[10px] font-black uppercase tracking-widest rounded-full border border-slate-200 dark:border-slate-700">
-                Loop End
-              </div>
-            </div>
-          </motion.div>
-        ) : node.type === 'condition' ? (
-          <div className="flex flex-col items-center relative">
-            {/* Condition Header Card */}
-            <motion.div
-              layoutId={node.id}
-              onClick={(e) => {
-                e.stopPropagation();
-                if (connectingFrom) {
-                  if (node.type !== 'trigger') {
-                    handleConnectToNode(node.id);
-                  }
-                  return;
-                }
-                setSelectedNodeId(node.id);
-              }}
-              className={`
-                relative z-30 flex items-center justify-between w-80 h-20 px-5 bg-white dark:bg-slate-900 rounded-[10px] border transition-all cursor-pointer shadow-sm hover:shadow-md
-                ${isSelected ? 'border-indigo-500 ring-2 ring-indigo-500/20' : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'}
-              `}
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg border border-indigo-100 dark:border-indigo-800/50">
-                  <GitBranch size={20} />
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-500 mb-0.5">Condition</span>
-                  <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate max-w-[180px]">{node.label}</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                 <button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    deleteNode(node.id);
-                  }}
-                  className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-500 rounded-lg transition-colors"
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            </motion.div>
-
-            {/* Main Container */}
-            <div className="relative -mt-10 pt-24 pb-10 px-8 border border-slate-200 dark:border-slate-800 rounded-[10px] bg-white dark:bg-slate-900 flex gap-12 w-fit min-w-[36rem] z-10 backdrop-blur-sm">
-              
-              {/* Orthogonal SVG Lines */}
-              <svg className="absolute top-0 left-0 w-full h-24 pointer-events-none overflow-visible">
-                <path 
-                  d={`M 50% 40 L 50% 60 L 25% 60 L 25% 96`} 
-                  fill="none" 
-                  stroke={isDarkMode ? '#334155' : '#cbd5e1'} 
-                  strokeWidth="2" 
-                  strokeLinecap="round"
-                  className="connection-line"
-                />
-                <path 
-                  d={`M 50% 40 L 50% 60 L 75% 60 L 75% 96`} 
-                  fill="none" 
-                  stroke={isDarkMode ? '#334155' : '#cbd5e1'} 
-                  strokeWidth="2" 
-                  strokeLinecap="round"
-                  className="connection-line"
-                />
-              </svg>
-
-              {/* True Branch */}
-              <div className={`flex-1 flex flex-col items-center relative transition-all ${activePopoverId?.includes(`${node.id}-true`) ? 'z-[60]' : 'z-20 hover:z-40'}`}>
-                <div className="bg-emerald-500 text-white px-6 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-emerald-500/20 mb-6 transform -translate-y-1">
-                  <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
-                  True
-                </div>
-                <div className="w-full border border-dashed border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-[10px] p-6 shadow-inner min-h-[200px] flex flex-col items-center">
-                   {trueBranch.map((child, idx) => renderNode(child, { isFirst: idx === 0, hideLabel: idx === 0, parentId: node.id, prompt: 'True' }))}
-                   {(!trueBranch || trueBranch.length === 0) && (
-                     <AddButton parentId={node.id} branch="true" />
-                   )}
-                </div>
-              </div>
-
-              {/* False Branch */}
-              <div className={`flex-1 flex flex-col items-center relative transition-all ${activePopoverId?.includes(`${node.id}-false`) ? 'z-[60]' : 'z-20 hover:z-40'}`}>
-                <div className="bg-rose-500 text-white px-6 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-rose-500/20 mb-6 transform -translate-y-1">
-                  <div className="w-1.5 h-1.5 bg-white rounded-full opacity-60" />
-                  False
-                </div>
-                <div className="w-full border border-dashed border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-[10px] p-6 shadow-inner min-h-[200px] flex flex-col items-center">
-                   {falseBranch.map((child, idx) => renderNode(child, { isFirst: idx === 0, hideLabel: idx === 0, parentId: node.id, prompt: 'False' }))}
-                   {(!falseBranch || falseBranch.length === 0) && (
-                     <AddButton parentId={node.id} branch="false" />
-                   )}
-                </div>
-              </div>
-            </div>
-          </div>
+          <ForEachNode {...nodeProps} />
+        ) : node.type === 'switch' ? (
+          <SwitchNode {...nodeProps} />
         ) : (
-          <div className="flex flex-col items-center relative group/switch-node">
-            {/* Switch Header Card */}
-            <motion.div
-              layoutId={node.id}
-              onClick={(e) => {
-                e.stopPropagation();
-                if (connectingFrom) {
-                  if (node.type !== 'trigger') {
-                    handleConnectToNode(node.id);
-                  }
-                  return;
-                }
-                setSelectedNodeId(node.id);
-              }}
-              className={`
-                relative z-30 flex items-center justify-between w-80 h-20 px-5 bg-white dark:bg-slate-900 rounded-[10px] border transition-all cursor-pointer shadow-sm hover:shadow-md
-                ${isSelected ? 'border-indigo-500 ring-2 ring-indigo-500/20' : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'}
-              `}
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg border border-indigo-100 dark:border-indigo-800/50">
-                  <Split size={20} />
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-500 mb-0.5">Switch</span>
-                  <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate max-w-[180px]">{node.label}</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                 <button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    deleteNode(node.id);
-                  }}
-                  className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-500 rounded-lg transition-colors"
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            </motion.div>
-
-            {/* Main Container */}
-            <div className="relative -mt-10 pt-24 pb-10 px-8 border border-slate-200 dark:border-slate-800 rounded-[10px] bg-white dark:bg-slate-900 flex gap-12 w-fit min-w-[36rem] z-10 backdrop-blur-sm">
-              
-              {/* Dynamic SVG Lines */}
-              <svg className="absolute top-0 left-0 w-full h-24 pointer-events-none overflow-visible">
-                {switchPaths.map((_, idx) => {
-                  const xPos = ((idx + 0.5) / switchPaths.length) * 100;
-                  return (
-                    <path 
-                      key={idx}
-                      d={`M 50% 40 L 50% 60 L ${xPos}% 60 L ${xPos}% 96`} 
-                      fill="none" 
-                      stroke={isDarkMode ? '#334155' : '#cbd5e1'} 
-                      strokeWidth="2" 
-                      strokeLinecap="round"
-                      className="connection-line"
-                    />
-                  );
-                })}
-              </svg>
-
-              {/* Switch Cases */}
-              {switchPaths.map((path, idx) => (
-                <div key={path.id} className={`flex-1 flex flex-col items-center relative transition-all ${activePopoverId?.includes(path.id) ? 'z-[60]' : 'z-20 hover:z-40'}`}>
-                  <div className="group/case relative flex flex-col items-center w-full">
-                    <div className={`px-6 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 shadow-lg mb-6 transform -translate-y-1 transition-all ${path.label === 'Default' ? 'bg-slate-500 text-white shadow-slate-500/20' : 'bg-indigo-500 text-white shadow-indigo-500/20'}`}>
-                      {path.label}
-                      {path.label !== 'Default' && (
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (!workflow) return;
-                            const updatedWorkflow = { ...workflow };
-                            const n = updatedWorkflow[node.id];
-                            if (n.paths) {
-                              n.paths = n.paths.filter(p => p.id !== path.id);
-                            }
-                            setWorkflow(updatedWorkflow);
-                          }}
-                          className="ml-2 opacity-0 group-hover/case:opacity-100 p-1 hover:bg-white/20 rounded-full transition-all"
-                        >
-                          <X size={10} />
-                        </button>
-                      )}
-                    </div>
-                    
-                    <div className="w-full border border-dashed border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-[10px] p-6 shadow-inner min-h-[200px] flex flex-col items-center">
-                       {path.node ? renderNode(path.node, { isFirst: true, hideLabel: true, parentId: node.id, pathId: path.id }) : (
-                         <AddButton parentId={node.id} pathId={path.id} />
-                       )}
-                    </div>
-
-                    {/* Add Case Button between cases */}
-                    {idx < switchPaths.length - 1 && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (!workflow) return;
-                          const updatedWorkflow = { ...workflow };
-                          const n = updatedWorkflow[node.id];
-                          if (n.paths) {
-                            const newCaseId = uuidv4();
-                            const caseCount = n.paths.filter(p => p.label.startsWith('Case')).length;
-                            const newPath = { id: newCaseId, label: `Case ${caseCount + 1}` };
-                            n.paths.splice(idx + 1, 0, newPath);
-                          }
-                          setWorkflow(updatedWorkflow);
-                        }}
-                        className="absolute top-1/2 -right-6 translate-x-1/2 z-30 w-8 h-8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-full flex items-center justify-center text-indigo-500 hover:scale-110 transition-all shadow-md opacity-0 group-hover/switch-node:opacity-100"
-                        title="Add Case"
-                      >
-                        <Plus size={14} />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-
-              {/* Add Case Button at the bottom of the container */}
-              <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 z-30 opacity-0 group-hover/switch-node:opacity-100 transition-opacity">
-                  <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (!workflow) return;
-                    const updatedWorkflow = { ...workflow };
-                    const n = updatedWorkflow[node.id];
-                    if (n.paths) {
-                      const newCaseId = uuidv4();
-                      const caseCount = n.paths.filter(p => p.label.startsWith('Case')).length;
-                      const newPath = { id: newCaseId, label: `Case ${caseCount + 1}` };
-                      const defaultIdx = n.paths.findIndex(p => p.label === 'Default');
-                      if (defaultIdx !== -1) {
-                        n.paths.splice(defaultIdx, 0, newPath);
-                      } else {
-                        n.paths.push(newPath);
-                      }
-                    }
-                    setWorkflow(updatedWorkflow);
-                  }}
-                  className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold uppercase tracking-widest rounded-full border border-slate-200 dark:border-slate-800 hover:border-indigo-500 transition-all shadow-lg"
-                >
-                  <Plus size={12} />
-                  Add Case
-                </button>
-              </div>
-            </div>
-          </div>
+          <BaseNode {...nodeProps} />
         )}
 
         {/* Agent/Trigger Paths */}
@@ -1386,33 +962,40 @@ export default function App() {
           <div className="flex flex-col items-center">
             <div className="h-10 connection-line-v" />
             <div className="flex justify-center relative group/paths">
-              {agentPaths.map((path, idx) => (
-                <div key={path.id} className={`flex flex-col items-center relative transition-all min-w-[20rem] px-8 ${activePopoverId?.includes(path.id) ? 'z-[60]' : 'z-10 hover:z-40'}`}>
-                  {/* Horizontal Line Segments to connect paths */}
-                  {agentPaths.length > 1 && (
-                    <div className="absolute top-0 left-0 right-0 flex">
-                      <div className={`flex-1 border-t-2 border-slate-200 dark:border-slate-800 ${idx === 0 ? 'opacity-0' : ''}`} />
-                      <div className={`flex-1 border-t-2 border-slate-200 dark:border-slate-800 ${idx === agentPaths.length - 1 ? 'opacity-0' : ''}`} />
+              {(node.paths || []).map((path, idx) => {
+                const pathNode = path.nodeId ? workflow[path.nodeId] : undefined;
+                return (
+                  <div key={path.id} className={`flex flex-col items-center relative transition-all min-w-[20rem] px-8 ${activePopoverId?.includes(path.id) ? 'z-[60]' : 'z-10 hover:z-40'}`}>
+                    {/* Horizontal Line Segments to connect paths */}
+                    {(node.paths || []).length > 1 && (
+                      <div className="absolute top-0 left-0 right-0 flex">
+                        <div className={`flex-1 border-t-2 border-slate-200 dark:border-slate-800 ${idx === 0 ? 'opacity-0' : ''}`} />
+                        <div className={`flex-1 border-t-2 border-slate-200 dark:border-slate-800 ${idx === (node.paths || []).length - 1 ? 'opacity-0' : ''}`} />
+                      </div>
+                    )}
+                    
+                    <div className="h-10 connection-line-v opacity-50" />
+                    <div className="px-3 py-1 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-bold rounded-full shadow-sm">
+                      {path.label}
                     </div>
-                  )}
-                  
-                  <div className="h-10 connection-line-v opacity-50" />
-                  <div className="px-3 py-1 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-bold rounded-full shadow-sm">
-                    {path.label}
+                    {pathNode ? renderNode(pathNode, { isFirst: true, hideLabel: true, parentId: node.id, pathId: path.id }) : (
+                      <nodeProps.AddButton parentId={node.id} pathId={path.id} />
+                    )}
                   </div>
-                  {path.node ? renderNode(path.node, { isFirst: true, hideLabel: true, parentId: node.id, pathId: path.id }) : (
-                    <AddButton parentId={node.id} pathId={path.id} />
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
-        {node.type !== 'agent' && node.type !== 'trigger' && children.map((child, idx) => renderNode(child, { isFirst: false, parentId: node.id }))}
-        
-        {/* Add Button for next sequential node - only if this is the end of the chain */}
-        {node.type !== 'agent' && node.type !== 'trigger' && children.length === 0 && (
-          <AddButton parentId={node.id} />
+
+        {/* Sequential Children */}
+        {node.type !== 'agent' && node.type !== 'trigger' && node.to?.filter(c => !c.prompt).map(c => workflow[c.id]).filter(Boolean).map((child: any) => 
+          renderNode(child, { parentId: node.id })
+        )}
+
+        {/* Add Button for sequential flow */}
+        {node.type !== 'agent' && node.type !== 'trigger' && node.to?.filter(c => !c.prompt).length === 0 && (
+          <nodeProps.AddButton parentId={node.id} />
         )}
       </div>
     );
@@ -1829,369 +1412,21 @@ export default function App() {
 
       {/* Right Configuration Panel */}
       <AnimatePresence>
-        {selectedNode && (
-          <motion.div
-            initial={{ x: 400 }}
-            animate={{ x: 0 }}
-            exit={{ x: 400 }}
-            className="w-96 bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-2xl z-10 flex flex-col"
-          >
-            <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg text-slate-600 dark:text-slate-400">
-                  {React.createElement(NODE_ICONS[selectedNode.type] || Play, { size: 20 })}
-                </div>
-                <h2 className="font-bold text-slate-800 dark:text-slate-100">Configure {selectedNode.type}</h2>
-              </div>
-              <button 
-                onClick={() => setSelectedNodeId(null)}
-                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 transition-colors"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            {/* Tabs */}
-            <div className="flex border-b border-slate-100 dark:border-slate-800 px-6 gap-6">
-              {['Parameters', 'Code View', 'About'].map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`py-4 text-[11px] font-bold uppercase tracking-wider transition-all relative ${
-                    activeTab === tab 
-                      ? 'text-indigo-600 dark:text-indigo-400' 
-                      : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
-                  }`}
-                >
-                  {tab}
-                  {activeTab === tab && (
-                    <motion.div 
-                      layoutId="activeTab"
-                      className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 dark:bg-indigo-400"
-                    />
-                  )}
-                </button>
-              ))}
-            </div>
-            
-            <div className="flex-1 overflow-auto p-6 space-y-8">
-              {activeTab === 'Parameters' && (
-                <div className="space-y-8">
-                  {/* Name always as first position */}
-                  <section>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">Name</label>
-                    <input 
-                      type="text" 
-                      value={selectedNode.label}
-                      onChange={(e) => {
-                        const updatedWorkflow = JSON.parse(JSON.stringify(workflow));
-                        const node = updatedWorkflow[selectedNode.id];
-                        if (node) node.label = e.target.value;
-                        setWorkflow(updatedWorkflow);
-                      }}
-                      className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-[10px] focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all text-sm font-medium dark:text-slate-200"
-                    />
-                  </section>
-
-                  {/* AI Agent Prompt (if applicable) */}
-                  {selectedNode.type === 'agent' && (
-                    <section className="space-y-4">
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">AI Agent Prompt</label>
-                        <textarea 
-                          className="w-full h-40 px-4 py-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-[10px] focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all text-sm leading-relaxed dark:text-slate-200"
-                          placeholder="You're a support agent resolving customer queries..."
-                          value={selectedNode.prompt || ''}
-                          onChange={(e) => {
-                            const updatedWorkflow = { ...workflow };
-                            if (updatedWorkflow[selectedNode.id]) {
-                              updatedWorkflow[selectedNode.id].prompt = e.target.value;
-                              setWorkflow(updatedWorkflow);
-                            }
-                          }}
-                        />
-                      </div>
-                    </section>
-                  )}
-
-                  {/* Wait Duration (if applicable) */}
-                  {selectedNode.type === 'wait' && (
-                    <section>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">Wait Duration (seconds)</label>
-                      <input 
-                        type="number" 
-                        value={selectedNode.duration || 60}
-                        onChange={(e) => {
-                          const updatedWorkflow = { ...workflow };
-                          if (updatedWorkflow[selectedNode.id]) {
-                            updatedWorkflow[selectedNode.id].duration = parseInt(e.target.value) || 0;
-                            setWorkflow(updatedWorkflow);
-                          }
-                        }}
-                        className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-[10px] focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all text-sm font-medium dark:text-slate-200"
-                      />
-                    </section>
-                  )}
-
-                  {/* Dynamic Parameters for Triggers and Actions */}
-                  {(selectedNode.type === 'trigger' || selectedNode.type === 'action') && (() => {
-                    const typeInfo = selectedNode.type === 'trigger' 
-                      ? TRIGGER_TYPES.find(t => t.id === selectedNode.triggerKey)
-                      : ACTION_TYPES.find(a => a.id === selectedNode.actionKey);
-                    
-                    if (!typeInfo?.parameters) return null;
-
-                    return (
-                      <section className="space-y-6">
-                        <div className="flex items-center justify-between">
-                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Parameters</label>
-                        </div>
-                        
-                        <div className="space-y-6">
-                          {typeInfo.parameters.map((param: any) => {
-                            const value = selectedNode.parameters?.inputs 
-                              ? selectedNode.parameters.inputs[param.id]
-                              : selectedNode.parameters?.[param.id];
-                            
-                            const updateParam = (val: any) => {
-                              const updatedWorkflow = { ...workflow };
-                              const node = updatedWorkflow[selectedNode.id];
-                              if (node) {
-                                if (!node.parameters) node.parameters = {};
-                                if (node.code_view) {
-                                  if (!node.parameters.inputs) node.parameters.inputs = {};
-                                  node.parameters.inputs[param.id] = val;
-                                } else {
-                                  node.parameters[param.id] = val;
-                                }
-                                setWorkflow(updatedWorkflow);
-                              }
-                            };
-
-                            return (
-                              <div key={param.id} className="space-y-2">
-                                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
-                                  {param.label}
-                                  {param.required && <span className="text-red-500">*</span>}
-                                </label>
-
-                                {param.type === 'text' && (
-                                  <input 
-                                    type="text"
-                                    placeholder={param.placeholder}
-                                    value={value || ''}
-                                    onChange={(e) => updateParam(e.target.value)}
-                                    className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-[10px] focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all text-sm font-medium dark:text-slate-200"
-                                  />
-                                )}
-
-                                {param.type === 'textarea' && (
-                                  <textarea 
-                                    placeholder={param.placeholder}
-                                    value={value || ''}
-                                    onChange={(e) => updateParam(e.target.value)}
-                                    className="w-full h-32 px-4 py-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-[10px] focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all text-sm leading-relaxed dark:text-slate-200"
-                                  />
-                                )}
-
-                                {param.type === 'select' && (
-                                  <div className="relative">
-                                    <select 
-                                      value={value || ''}
-                                      onChange={(e) => updateParam(e.target.value)}
-                                      className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-[10px] focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all text-sm font-medium dark:text-slate-200 appearance-none pr-10"
-                                    >
-                                      <option value="" disabled>Select {param.label}</option>
-                                      {param.options.map((opt: any) => (
-                                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                      ))}
-                                    </select>
-                                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                                      <ChevronUp className="rotate-180" size={16} />
-                                    </div>
-                                  </div>
-                                )}
-
-                                {param.type === 'keyvalue' && (
-                                  <div className="space-y-3">
-                                    {(value || [{ key: '', value: '' }]).map((kv: any, idx: number) => (
-                                      <div key={idx} className="flex items-center gap-2">
-                                        <input 
-                                          type="text"
-                                          placeholder="Enter key"
-                                          value={kv.key}
-                                          onChange={(e) => {
-                                            const newList = [...(value || [{ key: '', value: '' }])];
-                                            newList[idx] = { ...newList[idx], key: e.target.value };
-                                            updateParam(newList);
-                                          }}
-                                          className="flex-1 px-3 py-2 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg text-xs dark:text-slate-200"
-                                        />
-                                        <input 
-                                          type="text"
-                                          placeholder="Enter value"
-                                          value={kv.value}
-                                          onChange={(e) => {
-                                            const newList = [...(value || [{ key: '', value: '' }])];
-                                            newList[idx] = { ...newList[idx], value: e.target.value };
-                                            updateParam(newList);
-                                          }}
-                                          className="flex-1 px-3 py-2 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg text-xs dark:text-slate-200"
-                                        />
-                                        <button 
-                                          onClick={() => {
-                                            const newList = (value || [{ key: '', value: '' }]).filter((_: any, i: number) => i !== idx);
-                                            updateParam(newList.length ? newList : [{ key: '', value: '' }]);
-                                          }}
-                                          className="p-2 text-slate-400 hover:text-red-500"
-                                        >
-                                          <Trash2 size={14} />
-                                        </button>
-                                      </div>
-                                    ))}
-                                    <button 
-                                      onClick={() => updateParam([...(value || [{ key: '', value: '' }]), { key: '', value: '' }])}
-                                      className="text-[10px] font-bold text-blue-500 hover:text-blue-600 flex items-center gap-1"
-                                    >
-                                      <Plus size={10} /> Add field
-                                    </button>
-                                  </div>
-                                )}
-
-                                {param.type === 'json' && (
-                                  <JSONTagEditor 
-                                    value={value}
-                                    onChange={updateParam}
-                                    workflow={workflow}
-                                    placeholder={param.placeholder}
-                                  />
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </section>
-                    );
-                  })()}
-
-                  {/* Exit Conditions / Paths (always last position) */}
-                  {(selectedNode.type === 'agent' || selectedNode.type === 'trigger' || selectedNode.type === 'switch') && (
-                    <section className="space-y-6">
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">
-                          {selectedNode.type === 'switch' ? 'CASES' : 'EXIT CONDITIONS / PATHS'}
-                        </label>
-                        <div className="space-y-3">
-                          {selectedNode.paths?.map((path, idx) => (
-                            <div key={path.id} className="flex items-center gap-2">
-                              <input 
-                                type="text"
-                                value={path.label}
-                                onChange={(e) => {
-                                  const updatedWorkflow = { ...workflow };
-                                  const node = updatedWorkflow[selectedNode.id];
-                                  if (node && node.paths) {
-                                    const p = node.paths.find(p => p.id === path.id);
-                                    if (p) p.label = e.target.value;
-                                    setWorkflow(updatedWorkflow);
-                                  }
-                                }}
-                                className="flex-1 px-3 py-2 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-[10px] text-xs dark:text-slate-200"
-                                placeholder={selectedNode.type === 'switch' ? `Case ${idx + 1}` : `Path ${idx + 1}`}
-                              />
-                              <button 
-                                onClick={() => {
-                                  const updatedWorkflow = { ...workflow };
-                                  const node = updatedWorkflow[selectedNode.id];
-                                  if (node && node.paths) {
-                                    node.paths = node.paths.filter(p => p.id !== path.id);
-                                    setWorkflow(updatedWorkflow);
-                                  }
-                                }}
-                                className="p-2 text-slate-400 hover:text-red-500"
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                      <button 
-                        onClick={() => {
-                          const updatedWorkflow = { ...workflow };
-                          const node = updatedWorkflow[selectedNode.id];
-                          if (node) {
-                            if (!node.paths) node.paths = [];
-                            node.paths.push({ 
-                              id: uuidv4(), 
-                              label: selectedNode.type === 'switch' ? `Case ${node.paths.length + 1}` : `Path ${node.paths.length + 1}` 
-                            });
-                            setWorkflow(updatedWorkflow);
-                          }
-                        }}
-                        className="w-full py-4 border border-dashed border-slate-200 dark:border-slate-700 rounded-[10px] text-xs font-bold text-slate-400 hover:border-indigo-500 hover:text-indigo-500 transition-all flex items-center justify-center gap-2"
-                      >
-                        <Plus size={14} /> {selectedNode.type === 'switch' ? 'Add case' : 'Add path'}
-                      </button>
-                    </section>
-                  )}
-                </div>
-              )}
-
-              {activeTab === 'Code View' && (() => {
-                const typeInfo = selectedNode.type === 'trigger' 
-                  ? TRIGGER_TYPES.find(t => t.id === selectedNode.triggerKey)
-                  : ACTION_TYPES.find(a => a.id === selectedNode.actionKey);
-                
-                const code = typeInfo?.code_view || selectedNode.code_view;
-
-                if (code) {
-                  return (
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Code Representation</label>
-                        <button 
-                          onClick={() => navigator.clipboard.writeText(code)}
-                          className="text-[10px] font-bold text-blue-500 hover:text-blue-600 flex items-center gap-1"
-                        >
-                          Copy Code
-                        </button>
-                      </div>
-                      <div className="p-6 bg-slate-900 rounded-2xl border border-slate-800 shadow-inner overflow-x-auto">
-                        <pre className="text-sm font-mono text-blue-400 leading-relaxed whitespace-pre-wrap">
-                          <code>{code}</code>
-                        </pre>
-                      </div>
-                      <p className="text-[10px] text-slate-400 italic">
-                        This is a read-only preview of the underlying code for this {selectedNode.type}.
-                      </p>
-                    </div>
-                  );
-                }
-
-                return (
-                  <div className="flex flex-col items-center justify-center py-24 text-center">
-                    <div className="w-16 h-16 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center mb-6 text-slate-300">
-                      <Terminal size={32} />
-                    </div>
-                    <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 mb-2">Code View</h3>
-                    <p className="text-xs text-slate-400 max-w-[200px]">No code representation available for this node type.</p>
-                  </div>
-                );
-              })()}
-
-              {activeTab === 'About' && (
-                <div className="flex flex-col items-center justify-center py-24 text-center">
-                  <div className="w-16 h-16 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center mb-6 text-slate-300">
-                    <AlertCircle size={32} />
-                  </div>
-                  <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 mb-2">{activeTab}</h3>
-                  <p className="text-xs text-slate-400 max-w-[200px]">This feature is currently under development.</p>
-                </div>
-              )}
-            </div>
-          </motion.div>
-        )}
+        <ConfigPanel 
+          selectedNode={selectedNode}
+          setSelectedNodeId={setSelectedNodeId}
+          workflow={workflow}
+          setWorkflow={setWorkflow}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          isEligibleForRunAfter={isEligibleForRunAfter}
+          expandedRunAfter={expandedRunAfter}
+          setExpandedRunAfter={setExpandedRunAfter}
+          getPrecedingNodes={getPrecedingNodes}
+          expandedNodes={expandedNodes}
+          setExpandedNodes={setExpandedNodes}
+          updateRunAfter={updateRunAfter}
+        />
       </AnimatePresence>
 
       {/* Node Selection Modal */}
